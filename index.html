@@ -322,6 +322,25 @@ button{cursor:pointer}
 .set .chk input{width:20px;height:20px;accent-color:var(--acc)}
 .set select.in{height:36px}
 .set .row{display:flex;gap:8px;flex-wrap:wrap}
+.gallery{position:absolute;inset:0;z-index:7;display:grid;grid-template-rows:auto minmax(0,1fr) auto;background:rgba(var(--bg-rgb),.97);border:1px solid var(--acc);box-shadow:0 0 40px rgba(var(--acc-rgb),.25);animation:holoIn .45s cubic-bezier(.2,.8,.2,1)}
+.gal-head{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;border-bottom:1px solid var(--line)}
+.gal-t{display:flex;flex-direction:column;min-width:0}
+.gal-t b{font-family:var(--f-display);font-size:20px;color:var(--acc);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gal-btns{display:flex;align-items:center;gap:6px}
+.gal-btns button{background:none;border:1px solid var(--line-hi);width:40px;height:40px;display:grid;place-items:center;color:var(--acc);font-size:22px;line-height:1}
+.gal-btns button:hover{border-color:var(--acc)}
+.gal-btns .label{min-width:44px;text-align:center}
+.gal-body{position:relative;overflow:auto;min-height:0;padding:12px}
+.gallery[data-mode="grid"] .gal-body{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:12px;align-content:start}
+.gal-body figure{margin:0;position:relative;cursor:pointer;border:1px solid var(--line);background:var(--panel-2)}
+.gal-body figure:hover{border-color:var(--acc)}
+.gal-body figure img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover}
+.gal-body figcaption{padding:6px 8px;font-size:13px;line-height:1.3;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.gal-body .num{position:absolute;top:6px;left:6px;min-width:26px;height:26px;display:grid;place-items:center;background:var(--acc);color:var(--bg);font-family:var(--f-display);font-weight:700}
+.gallery[data-mode="one"] .gal-body{overflow:hidden;display:grid;place-items:center;touch-action:none;cursor:grab}
+.gallery[data-mode="one"] .gal-body img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .25s ease;user-select:none;-webkit-user-drag:none}
+.gal-cap{padding:8px 14px;border-top:1px solid var(--line);font-size:14px;line-height:1.35;color:var(--text);max-height:4.2em;overflow:hidden}
+.holo .wimg{width:100%;max-height:34vh;object-fit:cover;border:1px solid var(--line)}
 .quota{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .quota > div{border:1px solid var(--line);padding:6px 8px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .quota b{font-family:var(--f-display);font-size:17px;color:var(--st);font-variant-numeric:tabular-nums}
@@ -663,6 +682,20 @@ button{cursor:pointer}
       <div class="holo-body" id="holoBody"></div>
       <div class="holo-timer"><i id="holoBar"></i></div>
     </aside>
+
+    <section class="gallery" id="gallery" hidden aria-label="Photos">
+      <header class="gal-head">
+        <div class="gal-t"><span class="label" id="galKicker">Photos</span><b id="galTitle"></b></div>
+        <div class="gal-btns">
+          <button id="galGrid" aria-label="Toutes les photos" title="Toutes les photos"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M1 1h6v6H1zM9 1h6v6H9zM1 9h6v6H1zM9 9h6v6H9z"/></svg></button>
+          <button id="galPrev" aria-label="Photo précédente">‹</button><span class="label" id="galCount"></span><button id="galNext" aria-label="Photo suivante">›</button>
+          <button id="galZout" aria-label="Zoom arrière">−</button><button id="galZin" aria-label="Zoom avant">+</button>
+          <button id="galClose" aria-label="Fermer la galerie">×</button>
+        </div>
+      </header>
+      <div class="gal-body" id="galBody"></div>
+      <footer class="gal-cap" id="galCap"></footer>
+    </section>
   </div>
 
   <footer class="panel jarvis">
@@ -1022,7 +1055,7 @@ function goPage(p) {
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => goPage(t.dataset.page)));
 (() => { // balayage gauche / droite
   const stage = $('stage'); let sx = null, sy = 0;
-  stage.addEventListener('pointerdown', e => { if (e.target.closest('input,button,.holo')) return; sx = e.clientX; sy = e.clientY; });
+  stage.addEventListener('pointerdown', e => { if (e.target.closest('input,button,.holo,.gallery')) return; sx = e.clientX; sy = e.clientY; });
   stage.addEventListener('pointerup', e => {
     if (sx === null) return; const dx = e.clientX - sx, dy = e.clientY - sy; sx = null;
     if (Math.abs(dx) > 80 && Math.abs(dy) < 70) { const i = PAGES.indexOf(page) + (dx < 0 ? 1 : -1); if (PAGES[i]) goPage(PAGES[i]); }
@@ -1904,6 +1937,7 @@ renderMusic();
 let holoTimer = null;
 function holo(title, html, opts = {}) {
   const el = $('holo');
+  const gl = document.getElementById('gallery'); if (gl) gl.hidden = true; // la fenêtre passe devant la galerie
   $('holoTitle').textContent = title; $('holoBody').innerHTML = html; $('holoKicker').textContent = opts.kicker || 'Jarvis';
   el.hidden = true; void el.offsetWidth; el.hidden = false;
   clearTimeout(holoTimer);
@@ -1968,6 +2002,7 @@ function engineHolo() {
 }
 function answer(q) {
   const s = S(), t = norm(q), n = navInfo();
+  if (/^(ferme|fermer|cache|retire|enleve)( la| le| les| tout| ca)?( fenetre| galerie| photos?)?[ .!]*$/.test(t)) { closeHolo(); $('gallery').hidden = true; return "C'est fermé."; }
   const go = q.match(/^(?:jarvis[, ]*)?(?:va|vas|aller|allons|emm[eè]ne[- ]moi|itin[ée]raire|guide[- ]moi|direction|navigue|navigation)\s+(?:(?:à|a|au|aux|vers|jusqu'à|jusqu'a|pour)\s+)?(.{2,})$/i);
   if (go) { say(`Je cherche ${go[1]}…`); routeTo(go[1]); return null; }
   if (/annule|arrete la nav|stop nav|fin de la nav/.test(t) && /itin|nav|guidage/.test(t)) { clearRoute(); return 'Navigation annulée.'; }
@@ -2010,6 +2045,11 @@ function answer(q) {
     ? `Régénération en cours, filtre à ${fr(s.soot)} %. Évitez de couper le moteur et gardez si possible plus de 2 000 tr/min.`
     : `Filtre à particules chargé à ${fr(s.soot)} %. ${s.regens} régénération${s.regens > 1 ? 's' : ''} depuis le démarrage.`;
   if (/itin|gps|route|nav|arriv/.test(t)) return n.dist == null ? n.street : `Dans ${fmtDist(n.dist)} : ${n.street.toLowerCase()}. Arrivée prévue à ${n.eta}, ${fmtDist(n.remain)} restants.`;
+  const ph = t.match(/(?:photo|image)s? (?:de |des |du |d |sur )?(?:la |le |les |l )?(.{3,})/);
+  if (ph) {
+    AI_IMPL.chercher_images({ sujet: ph[1] }).then(r => say(r.ok ? `${r.nombre} photos. Dites « zoome », « suivante » ou « la 3 ».` : 'Je ne trouve pas de photo : ' + r.raison + '.'));
+    return null;
+  }
   if (/actu|news|info|journal/.test(t)) {
     const rub = /sport/.test(t) ? 'sport' : /monde|international/.test(t) ? 'international' : /eco/.test(t) ? 'economie' : /science/.test(t) ? 'sciences' : /tech/.test(t) ? 'technologies' : /politique/.test(t) ? 'politique' : 'une';
     AI_IMPL.actualites({ rubrique: rub }).then(r => say(r.articles ? `À la une : ${r.articles[0].titre}. Les autres titres sont à l'écran.` : 'Aucun article pour le moment.'))
@@ -2060,7 +2100,9 @@ Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases
 Pour toute action (itinéraire, musique, mode DNA, page, luminosité, diagnostic, météo, actualités), appelle l'outil correspondant au lieu d'annoncer que tu vas le faire.
 Quand une réponse mérite des détails (liste, explication longue, comparaison), affiche-les avec afficher_fenetre et résume-les en une phrase à l'oral.
 Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n'est pas disponible (adaptateur déconnecté ou donnée non transmise par la voiture) : dis-le simplement et n'invente jamais de valeur. Si la source est « simulation », précise que ce sont des données de démonstration.
-N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.`;
+N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.
+Photos : pour montrer des photos, appelle chercher_images (actualite=true pour un événement récent ou en cours, false sinon, avec des mots_cles_anglais). Ensuite « zoome », « la 3 », « suivante », « affiche-les toutes », « ferme » passent par l'outil galerie ; « montre-en d'autres » ou « plus de photos » relance chercher_images avec un nombre plus grand. Pour dire ce qu'on voit sur une photo, appelle decrire_image.
+Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.`;
 
 async function gemini(body, models = AI_MODELS()) {
   let lastErr = null;
@@ -2213,14 +2255,15 @@ const AI_IMPL = {
     const list = await fetchNews(a.rubrique || 'une');
     if (!list.length) return { ok: false, raison: 'aucun article' };
     holo('Actualités', newsHtml(list), { kicker: 'Le Monde · ' + (a.rubrique || 'à la une'), ms: 45000 });
-    return { articles: list.map(n => ({ titre: n.titre, resume: n.resume })) };
+    setGallery(list.filter(n => n.image).map(n => ({ src: n.image, titre: n.titre, legende: n.resume, source: 'Le Monde' })), 'Actualités', 'Le Monde', false);
+    return { articles: list.map((n, k) => ({ numero_photo: k + 1, titre: n.titre, resume: n.resume })) };
   }
 };
 
 function aiContext() {
   const s = S(), n = navInfo(), d = new Date();
   const src = source === sim ? 'simulation' : source instanceof ObdSource ? (source.connected ? 'OBD connecté' : 'OBD déconnecté') : 'OBD non connecté';
-  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label}]`;
+  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label} · galerie ${$('gallery').hidden ? 'fermée' : `ouverte : ${gal.items.length} photos « ${gal.title} », ${gal.mode === 'grid' ? 'grille' : 'photo ' + (gal.i + 1)}, zoom ${gal.z}`}]`;
 }
 async function askAI(q) {
   const contents = [...AI.hist, { role: 'user', parts: [{ text: `${aiContext()}\n${q}` }] }];
@@ -2330,10 +2373,205 @@ async function runBriefing(force) {
   if (!AI.cfg.key && !AI.keyHintSaid) { AI.keyHintSaid = true; setTimeout(() => say("Pour me donner un vrai cerveau, collez votre clé Gemini dans les réglages : l'engrenage en haut à droite."), 2500); }
 }
 
+/* ---------- Photos, galerie, Wikipédia, Google Actualités (tout gratuit, sans clé) ---------- */
+const PHOTO_FEEDS = [NEWS_FEEDS.une, NEWS_FEEDS.international, NEWS_FEEDS.politique, 'https://www.lemonde.fr/societe/rss_full.xml',
+  NEWS_FEEDS.economie, NEWS_FEEDS.sport, NEWS_FEEDS.sciences, 'https://www.francetvinfo.fr/titres.rss'];
+const GENERIC = new Set(['photo', 'photos', 'image', 'images', 'montre', 'affiche', 'recent', 'recente', 'recentes', 'derniere', 'dernieres', 'actualite', 'actualites', 'aujourd', 'hui', 'moi', 'des', 'les', 'une', 'dans', 'avec', 'pour', 'sur']);
+function keyStems(q) {
+  return norm(q).split(/[^a-z0-9]+/).filter(w => w.length >= 4 && !GENERIC.has(w)).map(w => w.slice(0, Math.max(4, Math.min(6, w.length - 1))));
+}
+function parseRss(txt, fallbackSource) {
+  const xml = new DOMParser().parseFromString(txt, 'text/xml');
+  const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent.trim(); };
+  return [...xml.querySelectorAll('item')].map(it => {
+    const media = it.getElementsByTagName('media:content')[0] || it.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')[0]
+      || it.getElementsByTagName('media:thumbnail')[0] || it.querySelector('enclosure');
+    const g = sel => (it.querySelector(sel) || {}).textContent || '';
+    return { titre: strip(g('title')), resume: strip(g('description')).slice(0, 220), lien: g('link'), date: g('pubDate'),
+      image: media ? media.getAttribute('url') : null, source: g('source') || fallbackSource };
+  });
+}
+async function searchNewsPhotos(q, n) {
+  const stems = keyStems(q);
+  const feeds = await Promise.allSettled(PHOTO_FEEDS.map(u => fetch(u).then(r => r.ok ? r.text() : Promise.reject()).then(t => parseRss(t, /francetvinfo/.test(u) ? 'franceinfo' : 'Le Monde'))));
+  const seen = new Set(), out = [];
+  feeds.filter(f => f.status === 'fulfilled').flatMap(f => f.value).forEach(it => {
+    if (!it.image || seen.has(it.image)) return;
+    const hay = norm(it.titre + ' ' + it.resume);
+    const score = stems.reduce((s, k) => s + (hay.includes(k) ? (k === 'franc' ? 0.3 : 1) : 0), 0);
+    if (stems.length && score < 1) return;
+    seen.add(it.image); out.push({ src: it.image, titre: it.titre, legende: it.resume, source: it.source, score, t: Date.parse(it.date) || 0 });
+  });
+  return out.sort((a, b) => b.score - a.score || b.t - a.t).slice(0, n);
+}
+async function searchCommons(q, n) {
+  const u = `https://commons.wikimedia.org/w/api.php?action=query&format=json&origin=*&generator=search&gsrsearch=${encodeURIComponent(q + ' filetype:bitmap')}&gsrnamespace=6&gsrlimit=${n}&prop=imageinfo&iiprop=url|extmetadata&iiurlwidth=1280`;
+  const j = await fetch(u).then(r => r.json());
+  const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent.trim(); };
+  return Object.values((j.query && j.query.pages) || {}).sort((a, b) => a.index - b.index).map(p => {
+    const ii = (p.imageinfo || [])[0] || {}, md = ii.extmetadata || {};
+    return { src: ii.thumburl || ii.url, titre: strip((md.ObjectName || {}).value) || p.title.replace(/^File:|\.\w+$/g, ''),
+      legende: strip((md.ImageDescription || {}).value).slice(0, 200), source: 'Wikimedia Commons', credit: strip((md.Artist || {}).value).slice(0, 60) };
+  }).filter(x => x.src);
+}
+async function searchNewsText(q) {
+  const txt = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=fr&gl=FR&ceid=FR:fr`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+  return parseRss(txt, 'Google Actualités').slice(0, 8).map(it => ({ titre: it.titre, source: it.source, date: it.date ? new Date(it.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '' }));
+}
+async function wikiLookup(q) {
+  const s = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=1&format=json&origin=*`).then(r => r.json());
+  const t = s.query && s.query.search[0] && s.query.search[0].title;
+  if (!t) throw new Error(`rien trouvé sur Wikipédia pour « ${q} »`);
+  const p = await fetch(`https://fr.wikipedia.org/api/rest_v1/page/summary/${encodeURIComponent(t.replace(/ /g, '_'))}`).then(r => r.json());
+  return { titre: p.title, resume: p.extract, image: (p.originalimage || p.thumbnail || {}).source || null };
+}
+async function imageToBase64(src) {
+  try { // 1) image chargée en CORS puis réduite sur un canvas
+    const img = await new Promise((ok, ko) => { const i = new Image(); i.crossOrigin = 'anonymous'; i.onload = () => ok(i); i.onerror = ko; i.src = src; });
+    const k = Math.min(1, 1024 / Math.max(img.naturalWidth, img.naturalHeight)), c = document.createElement('canvas');
+    c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+    c.getContext('2d').drawImage(img, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', 0.85).split(',')[1];
+  } catch (e) { // 2) téléchargement direct (appli Android : requête native)
+    const blob = await fetch(src).then(r => r.blob());
+    return await new Promise((ok, ko) => { const fr2 = new FileReader(); fr2.onload = () => ok(String(fr2.result).split(',')[1]); fr2.onerror = ko; fr2.readAsDataURL(blob); });
+  }
+}
+
+/* ---------- Galerie plein écran ---------- */
+const gal = { items: [], i: 0, mode: 'grid', z: 1, px: 0, py: 0, title: '', kicker: '' };
+function setGallery(items, title, kicker, show) {
+  Object.assign(gal, { items, i: 0, mode: items.length > 1 ? 'grid' : 'one', z: 1, px: 0, py: 0, title, kicker });
+  if (show) { $('gallery').hidden = false; closeHolo(); }
+  renderGallery();
+}
+function renderGallery() {
+  const g = $('gallery'); if (g.hidden) return;
+  const it = gal.items[gal.i] || {};
+  $('galTitle').textContent = gal.title; $('galKicker').textContent = gal.kicker || 'Photos';
+  $('galCount').textContent = gal.items.length ? `${gal.i + 1} / ${gal.items.length}` : '0';
+  g.dataset.mode = gal.mode;
+  const body = $('galBody');
+  if (gal.mode === 'grid') {
+    body.innerHTML = gal.items.map((x, k) => `<figure data-k="${k}"><img src="${esc(x.src)}" alt="${esc(x.titre)}" loading="lazy" referrerpolicy="no-referrer"><span class="num">${k + 1}</span><figcaption>${esc(x.titre)}</figcaption></figure>`).join('');
+    $('galCap').textContent = gal.items.length ? 'Touchez une photo pour l\'agrandir, ou dites « zoome sur la 2 ».' : 'Aucune photo.';
+  } else {
+    body.innerHTML = `<img id="galImg" src="${esc(it.src)}" alt="${esc(it.titre)}" referrerpolicy="no-referrer" style="transform:translate(${gal.px}px,${gal.py}px) scale(${gal.z})">`;
+    $('galCap').innerHTML = `<b>${esc(it.titre)}</b>${it.legende ? ' · ' + esc(it.legende) : ''}<span class="label"> ${esc(it.source || '')}${it.credit ? ' · ' + esc(it.credit) : ''}</span>`;
+  }
+}
+function galleryAction(action, numero) {
+  if (!gal.items.length) return { ok: false, raison: 'aucune photo chargée' };
+  const g = $('gallery'), n = gal.items.length;
+  if (numero && numero >= 1 && numero <= n) gal.i = numero - 1;
+  switch (action) {
+    case 'ouvrir': gal.mode = 'one'; gal.z = 1; gal.px = gal.py = 0; break;
+    case 'grille': gal.mode = 'grid'; break;
+    case 'suivante': gal.i = (gal.i + 1) % n; gal.mode = 'one'; gal.z = 1; gal.px = gal.py = 0; break;
+    case 'precedente': gal.i = (gal.i - 1 + n) % n; gal.mode = 'one'; gal.z = 1; gal.px = gal.py = 0; break;
+    case 'zoom_avant': if (gal.mode === 'grid' || g.hidden) { gal.mode = 'one'; gal.z = 1; } else gal.z = Math.min(4, +(gal.z * 1.6).toFixed(2)); break;
+    case 'zoom_arriere': if (gal.mode === 'one' && gal.z <= 1) gal.mode = 'grid'; gal.z = Math.max(1, +(gal.z / 1.6).toFixed(2)); if (gal.z === 1) gal.px = gal.py = 0; break;
+    case 'fermer': g.hidden = true; return { ok: true };
+  }
+  g.hidden = false; closeHolo(); renderGallery();
+  return { ok: true, mode: gal.mode === 'grid' ? 'grille' : 'une photo', photo: gal.i + 1, sur: n, zoom: gal.z, titre: gal.items[gal.i].titre };
+}
+// Commandes de galerie traitées sans IA quand la galerie est ouverte
+function galleryLocal(q) {
+  if ($('gallery').hidden) return null;
+  const t = norm(q);
+  // une vraie question (« qu'est-ce qu'on voit sur la 3 ? ») part chez Gemini
+  if (/\?|qu est|quoi|decri|raconte|explique|pourquoi|\bqui\b|combien|\bvoit\b|\bou\b|quand|parle/.test(t)) return null;
+  const ORD = { premiere: 1, premier: 1, deuxieme: 2, seconde: 2, second: 2, troisieme: 3, quatrieme: 4, cinquieme: 5, sixieme: 6, septieme: 7, huitieme: 8, neuvieme: 9, dixieme: 10, onzieme: 11, douzieme: 12 };
+  let num = t.match(/(?:photo|image|numero|la|le|sur)\s*(?:n°|numero)?\s*(\d{1,2})\b/);
+  const ord = t.match(/\b(premiere|premier|deuxieme|seconde|second|troisieme|quatrieme|cinquieme|sixieme|septieme|huitieme|neuvieme|dixieme|onzieme|douzieme|derniere|dernier)\b/);
+  if (!num && ord) num = [null, String(/dernier/.test(ord[1]) ? gal.items.length : ORD[ord[1]])];
+  let a = null;
+  if (/ferme|cache|quitte|enleve|retire/.test(t)) a = 'fermer';
+  else if (/dezoom|zoom arriere|moins pres|recule|retrecis|reduis/.test(t)) a = 'zoom_arriere';
+  else if (/zoom|agrandi|plus pres|plus gros|rapproche/.test(t)) a = num && gal.mode === 'grid' ? 'ouvrir' : 'zoom_avant';
+  else if (/suivant|d apres|prochaine/.test(t)) a = 'suivante';
+  else if (/precedent|d avant/.test(t)) a = 'precedente';
+  else if (/grille|toutes|mosaique|plusieurs/.test(t) && gal.items.length > 1 && !/autre|plus de|nouvelle/.test(t)) a = 'grille';
+  else if (num) a = 'ouvrir';
+  if (!a) return null;
+  const r = galleryAction(a, num ? +num[1] : 0);
+  return r.ok === false ? null : a === 'fermer' ? 'Galerie fermée.' : pick(['Voilà.', 'Voici, monsieur.', 'C\'est fait.']);
+}
+(() => {
+  $('galClose').addEventListener('click', () => galleryAction('fermer'));
+  $('galGrid').addEventListener('click', () => galleryAction('grille'));
+  $('galPrev').addEventListener('click', () => galleryAction('precedente'));
+  $('galNext').addEventListener('click', () => galleryAction('suivante'));
+  $('galZin').addEventListener('click', () => galleryAction('zoom_avant'));
+  $('galZout').addEventListener('click', () => galleryAction('zoom_arriere'));
+  const body = $('galBody'); let drag = null, lastTap = 0;
+  body.addEventListener('click', e => { const f = e.target.closest('figure'); if (f) galleryAction('ouvrir', +f.dataset.k + 1); });
+  body.addEventListener('pointerdown', e => {
+    if (gal.mode !== 'one') return;
+    const now = Date.now();
+    if (now - lastTap < 300) { galleryAction(gal.z > 1 ? 'zoom_arriere' : 'zoom_avant'); lastTap = 0; return; }
+    lastTap = now; drag = { x: e.clientX, y: e.clientY, px: gal.px, py: gal.py }; body.setPointerCapture(e.pointerId);
+  });
+  body.addEventListener('pointermove', e => {
+    if (!drag || gal.z <= 1) return;
+    gal.px = drag.px + e.clientX - drag.x; gal.py = drag.py + e.clientY - drag.y;
+    const im = $('galImg'); if (im) im.style.transform = `translate(${gal.px}px,${gal.py}px) scale(${gal.z})`;
+  });
+  body.addEventListener('pointerup', e => {
+    if (drag && gal.z <= 1 && Math.abs(e.clientX - drag.x) > 70) galleryAction(e.clientX < drag.x ? 'suivante' : 'precedente');
+    drag = null;
+  });
+})();
+
+AI_TOOLS.push(
+  { name: 'chercher_images', description: "Cherche des photos et les affiche dans la galerie plein écran. actualite=true pour un événement récent ou en cours (manifestations, match, élection…), false pour un objet, un lieu, une voiture, un animal, une personne célèbre.", parameters: { type: 'object', properties: { sujet: { type: 'string', description: 'Sujet en français' }, actualite: { type: 'boolean' }, nombre: { type: 'integer', description: 'Nombre de photos, 1 à 12 (6 par défaut)' }, mots_cles_anglais: { type: 'string', description: 'Mêmes mots-clés en anglais, pour les photos hors actualité' } }, required: ['sujet'] } },
+  { name: 'galerie', description: "Pilote la galerie de photos affichée : ouvrir une photo, revenir à la grille de toutes les photos, suivante, précédente, zoom avant, zoom arrière, fermer.", parameters: { type: 'object', properties: { action: { type: 'string', enum: ['ouvrir', 'grille', 'suivante', 'precedente', 'zoom_avant', 'zoom_arriere', 'fermer'] }, numero: { type: 'integer', description: 'Numéro de la photo (1 = première)' } }, required: ['action'] } },
+  { name: 'decrire_image', description: 'Regarde une photo de la galerie et décrit ce qu\'on y voit.', parameters: { type: 'object', properties: { numero: { type: 'integer', description: 'Numéro de la photo ; par défaut celle affichée' } } } },
+  { name: 'wikipedia', description: 'Résumé Wikipédia (en français) d\'un sujet précis, avec une image, affiché à l\'écran.', parameters: { type: 'object', properties: { sujet: { type: 'string' } }, required: ['sujet'] } },
+  { name: 'recherche_actualites', description: 'Derniers articles de presse (Google Actualités) sur un sujet précis.', parameters: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }
+);
+Object.assign(AI_IMPL, {
+  chercher_images: async a => {
+    const n = Math.max(1, Math.min(12, a.nombre || 6));
+    let items = [], src = '';
+    if (a.actualite !== false) { items = await searchNewsPhotos(a.sujet, n).catch(() => []); src = 'Photos d\'actualité'; }
+    if (!items.length) {
+      src = 'Wikimedia Commons';
+      items = await searchCommons(a.mots_cles_anglais || a.sujet, n).catch(() => []);
+      if (!items.length && a.mots_cles_anglais) items = await searchCommons(a.sujet, n).catch(() => []);
+    }
+    if (!items.length) return { ok: false, raison: 'aucune photo trouvée' + (NATIVE ? '' : " (les photos d'actualité ne fonctionnent que dans l'appli Android)") };
+    setGallery(items, a.sujet, src, true);
+    return { ok: true, source: src, nombre: items.length, photos: items.map((x, k) => ({ numero: k + 1, titre: x.titre })) };
+  },
+  galerie: async a => galleryAction(a.action, a.numero),
+  decrire_image: async a => {
+    const it = gal.items[(a.numero || gal.i + 1) - 1];
+    if (!it) return { ok: false, raison: 'aucune photo affichée' };
+    let b64; try { b64 = await imageToBase64(it.src); } catch (e) { return { ok: false, raison: "impossible de récupérer l'image" }; }
+    const j = await gemini({ contents: [{ role: 'user', parts: [{ inlineData: { mimeType: 'image/jpeg', data: b64 } }, { text: `Légende connue : « ${it.titre} ». Décris factuellement cette photo en français, en deux ou trois phrases.` }] }], generationConfig: { maxOutputTokens: 250 } });
+    return { description: ((j.candidates && j.candidates[0].content && j.candidates[0].content.parts) || []).map(p => p.text || '').join(' ').trim() };
+  },
+  wikipedia: async a => {
+    const w = await wikiLookup(a.sujet);
+    holo(w.titre, (w.image ? `<img class="wimg" src="${esc(w.image)}" alt="" referrerpolicy="no-referrer">` : '') + `<p>${esc(w.resume)}</p><p class="note">Source : Wikipédia</p>`, { kicker: 'Wikipédia', ms: 40000 });
+    if (w.image) setGallery([{ src: w.image, titre: w.titre, source: 'Wikipédia' }], w.titre, 'Wikipédia', false);
+    return { titre: w.titre, resume: String(w.resume || '').slice(0, 1500) };
+  },
+  recherche_actualites: async a => {
+    const l = await searchNewsText(a.question);
+    if (!l.length) return { ok: false, raison: 'aucun article trouvé' };
+    holo('Actualités', `<p class="note">${esc(a.question)}</p><ul class="news">${l.map(x => `<li style="grid-template-columns:1fr"><div><b>${esc(x.titre)}</b><span>${esc(x.source)} · ${esc(x.date)}</span></div></li>`).join('')}</ul>`, { kicker: 'Google Actualités', ms: 40000 });
+    return { articles: l };
+  }
+});
+
 // Commandes simples et boutons rapides : exécutés sans IA (instantané, zéro requête du quota)
 function isQuickCommand(q) {
   const t = norm(q).replace(/[!?.,]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^jarvis /, '').replace(/ (stp|s il te plait|s il vous plait)$/, '');
   return /^(etat moteur|diagnostic|entretien|actualites)$/.test(t)
+    || /^(ferme|fermer|cache|retire|enleve)( la| le| les| tout| ca)?( fenetre| galerie| photos?)?$/.test(t)
     || /^(passe |mets |active |bascule )?(en |le )?mode (sport|dynamic|d|pluie|all ?weather|a|normal|natural|n|nuit|jour)$/.test(t)
     || /^(mode )?(nuit|jour)$/.test(t)
     || /^(mets |joue |lance |coupe )?(la )?(musique|chanson|titre)( suivante| suivant| precedente| precedent)?$/.test(t)
@@ -2343,6 +2581,7 @@ function isQuickCommand(q) {
 }
 function ask(q) {
   q = q.trim(); if (!q) return; addMsg(q, true);
+  const g = galleryLocal(q); if (g) { setTimeout(() => say(g), 150); return; }
   if (!AI.cfg.key || isQuickCommand(q)) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 250); return; }
   // questions posées à la suite : traitées dans l'ordre
   AI.chain = AI.chain.then(() => {

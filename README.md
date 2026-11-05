@@ -20,6 +20,8 @@ Deux façons de l'utiliser :
 - **Musique** : touchez le titre dans le lecteur (« Accès à la musique »). Android ouvre la page « Accès aux notifications » : activez **Jarvis**. Jarvis affiche alors le titre, l'artiste et la pochette de Spotify, YouTube Music, Deezer… et les boutons pilotent le lecteur. Jarvis ne lit aucune notification.
 - **Cerveau Gemini** : touchez l'engrenage en haut à droite, collez votre clé API Gemini (https://aistudio.google.com/apikey), puis **Tester** et **Enregistrer**. La clé reste sur la tablette, elle n'est jamais dans ce dépôt. Jarvis comprend alors n'importe quelle question et agit : itinéraire, musique, mode DNA, pages, météo, actualités, diagnostic, entretien. Sans clé, il garde ses réponses intégrées.
 - **Plan gratuit Gemini** : Flash-Lite = 500 requêtes/jour, Flash = 20/jour. Une question coûte 1 à 3 requêtes ; les commandes simples (« mode sport », « musique suivante », « montre la carte », « nuit ») et les boutons État, Diag, Entretien, Actus n'en coûtent aucune. Le compteur du jour est dans les réglages ; quota épuisé = réponses intégrées jusqu'à la remise à zéro (9 h en France).
+- **Photos** : « affiche-moi des photos des manifs en France » (photos d'actualité du Monde et de franceinfo), « montre-moi des photos de la Giulietta » (Wikimedia Commons). Galerie plein écran : « zoome sur la deuxième », « zoome encore », « suivante », « affiche-les toutes », « ferme » (sans IA, gratuit), et « qu'est-ce qu'on voit sur la photo 3 ? » (Gemini regarde l'image). Au doigt : toucher pour ouvrir, double-tap pour zoomer, glisser pour déplacer ou changer de photo.
+- **Savoir** : culture générale directement, Wikipédia pour les faits précis (avec image), Google Actualités pour l'actualité d'un sujet.
 - **Briefing au démarrage** : météo de votre position (Open-Meteo), pluie à venir, rappels d'entretien, état de la voiture, rédigé par Gemini et lu à voix haute si la voix est activée. Se désactive dans les réglages.
 - **Voix** : bouton Voix dans la console. Elle utilise la synthèse vocale d'Android (voix française à installer dans Paramètres → Synthèse vocale si besoin).
 
@@ -65,7 +67,8 @@ Tous gratuits pour un usage personnel :
 - Recherche d'adresses : Nominatim (OpenStreetMap)
 - Itinéraires : serveur public OSRM
 - Météo : Open-Meteo (sans clé)
-- Actualités : flux RSS du Monde (dans l'appli Android)
+- Actualités et photos d'actualité : flux RSS du Monde et de franceinfo, Google Actualités (dans l'appli Android)
+- Photos libres : Wikimedia Commons ; résumés : Wikipédia
 - Intelligence : API Gemini de Google (votre clé)
 - Carte affichée avec Leaflet (inclus dans `lib/`)
 
