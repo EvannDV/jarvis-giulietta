@@ -89,6 +89,41 @@ button{cursor:pointer}
 .page:not([hidden]){animation:pageIn .35s ease}
 @keyframes pageIn{from{opacity:0;transform:translateX(var(--dir,14px))}}
 .drive{grid-template-columns:1.25fr .85fr 1.15fr}
+.navp{grid-template-columns:3fr 1fr}
+.navp .turn{padding:14px 16px;gap:16px}
+.navp .turn svg{width:56px;height:56px}
+.navp .turn b{font-size:clamp(28px,3.4vw,44px)}
+.navp .turn span{font-size:clamp(15px,1.5vw,20px)}
+.navp .eta b{font-size:clamp(20px,2vw,28px)}
+.navp .eta{padding:10px 14px}
+.navp .attrib{bottom:70px}
+/* Grand lecteur (1/4 de la page Nav) */
+.player{padding:16px;display:flex;flex-direction:column;gap:14px;min-height:0;overflow:hidden}
+.bigcover{width:100%;aspect-ratio:1;max-width:100%;max-height:38vh;align-self:center;display:flex;align-items:flex-end;justify-content:center;gap:6px;padding:16%;
+  border:1px solid var(--line-hi);background:linear-gradient(var(--ang,135deg), rgba(var(--acc-rgb),.65), rgba(var(--acc-rgb),.05) 75%), var(--panel-2);
+  box-shadow:inset 0 0 40px rgba(var(--acc-rgb),.3), 0 0 30px rgba(var(--acc-rgb),.15)}
+.bigcover i{flex:1;max-width:12px;height:30%;background:var(--text);opacity:.9;border-radius:2px}
+.bigcover i:nth-child(2n){height:60%}.bigcover i:nth-child(3n){height:45%}
+.bigcover.playing i{animation:eq .8s ease-in-out infinite alternate}
+.bigcover.playing i:nth-child(2){animation-delay:-.2s}.bigcover.playing i:nth-child(3){animation-delay:-.45s}.bigcover.playing i:nth-child(4){animation-delay:-.1s}
+.bigcover.playing i:nth-child(5){animation-delay:-.35s}.bigcover.playing i:nth-child(6){animation-delay:-.6s}.bigcover.playing i:nth-child(7){animation-delay:-.25s}
+.ptrack b{display:block;font-family:var(--f-display);font-size:clamp(18px,1.9vw,26px);font-weight:600;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ptrack span{display:block;color:var(--muted);font-size:15px;margin-top:2px}
+.pbar{height:4px;background:var(--line);position:relative}
+.pbar i{position:absolute;inset:0 auto 0 0;background:var(--acc);box-shadow:0 0 8px var(--acc)}
+.ptimes{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums;margin-top:6px}
+.pctrl{display:flex;justify-content:center;align-items:center;gap:14px}
+.pctrl button{background:none;border:1px solid var(--line-hi);width:52px;height:52px;display:grid;place-items:center;color:var(--acc);border-radius:50%}
+.pctrl button:hover{border-color:var(--acc)}
+.pctrl #bPlay{width:70px;height:70px;background:var(--acc);color:var(--bg);border-color:var(--acc);box-shadow:0 0 20px rgba(var(--acc-rgb),.5)}
+.plist{list-style:none;margin:0;padding:0;overflow-y:auto;min-height:0;flex:1;border-top:1px solid var(--line)}
+.plist li{display:grid;grid-template-columns:1fr auto;gap:8px;padding:8px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.plist li span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.plist li small{color:var(--muted);font-family:var(--f-mono);font-size:11px}
+.plist li.on{color:var(--acc)}
+.plist li.on > span::before{content:"▶ ";font-size:11px}
+/* Fenêtre holographique : sur la page Nav elle s'ouvre sur la musique pour laisser la carte libre */
+.stage[data-page="nav"] .holo{left:auto;right:0;width:calc((100% - 10px) / 4)}
 .motor{grid-template-columns:1.6fr 1fr}
 .perf{grid-template-columns:1.35fr 1fr}
 .garage{grid-template-columns:1.15fr 1fr}
@@ -279,6 +314,8 @@ button{cursor:pointer}
 .mrow{display:flex;justify-content:space-between;align-items:center;gap:6px}
 #mTime{white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.04em}
 @media (max-height:620px){
+  .bigcover{max-height:24vh}
+  .pctrl button{width:44px;height:44px}.pctrl #bPlay{width:58px;height:58px}
   .tile{padding:8px 10px;gap:4px}
   .tiles,.engine{gap:8px}
   .tile .state{font-size:9px;padding:1px 5px}
@@ -413,6 +450,7 @@ button{cursor:pointer}
     </div>
     <nav class="tabs" role="tablist" aria-label="Pages">
       <button class="tab" role="tab" data-page="drive" aria-selected="true">Conduite</button>
+      <button class="tab" role="tab" data-page="nav" aria-selected="false">Nav</button>
       <button class="tab" role="tab" data-page="motor" aria-selected="false">Moteur</button>
       <button class="tab" role="tab" data-page="perf" aria-selected="false">Perf</button>
       <button class="tab" role="tab" data-page="garage" aria-selected="false">Garage</button>
@@ -494,6 +532,23 @@ button{cursor:pointer}
     </section>
 
     <!-- ============ MOTEUR ============ -->
+    <!-- ============ NAV : carte 3/4 + musique 1/4 ============ -->
+    <section class="page navp" data-page="nav" aria-label="Navigation et musique" hidden>
+      <div id="navSlot" style="display:contents"></div>
+      <div class="panel player" aria-label="Musique">
+        <div class="ptitle"><span class="label">Musique</span><span class="label">démo</span></div>
+        <div class="bigcover" id="bCover" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i><i></i><i></i></div>
+        <div class="ptrack"><b id="bTitle">--</b><span id="bArtist">--</span></div>
+        <div><div class="pbar"><i id="bProg"></i></div><div class="ptimes"><span id="bPos">0:00</span><span id="bDur">0:00</span></div></div>
+        <div class="pctrl">
+          <button id="bPrev" aria-label="Titre précédent"><svg width="18" height="18" viewBox="0 0 14 14" fill="currentColor"><path d="M2 2h2v10H2zM13 2v10L5 7z"/></svg></button>
+          <button id="bPlay" aria-label="Lecture"><svg width="24" height="24" viewBox="0 0 14 14" fill="currentColor"><path id="bPlayIco" d="M3 1.5v11L12.5 7z"/></svg></button>
+          <button id="bNext" aria-label="Titre suivant"><svg width="18" height="18" viewBox="0 0 14 14" fill="currentColor"><path d="M10 2h2v10h-2zM1 2v10l8-5z"/></svg></button>
+        </div>
+        <ul class="plist" id="plist"></ul>
+      </div>
+    </section>
+
     <section class="page motor" data-page="motor" aria-label="Moteur" hidden>
       <div class="panel holo-panel">
         <canvas id="holoCar" aria-label="Hologramme de la voiture avec l'état du moteur, du turbo et du filtre à particules"></canvas>
@@ -843,7 +898,7 @@ const STC = { na: () => T['--muted'], ok: () => T['--ok'], cold: () => T['--ice'
 /* ============================================================
    NAVIGATION ENTRE PAGES
    ============================================================ */
-const PAGES = ['drive', 'motor', 'perf', 'garage'];
+const PAGES = ['drive', 'nav', 'motor', 'perf', 'garage'];
 let page = 'drive';
 function goPage(p) {
   if (!PAGES.includes(p) || p === page) return;
@@ -853,6 +908,12 @@ function goPage(p) {
   document.querySelectorAll('.tab').forEach(t => t.setAttribute('aria-selected', t.dataset.page === p));
   if (p === 'garage') { renderMaint(); renderHist(); }
   if (p === 'perf') renderBest();
+  $('stage').dataset.page = p;
+  // la carte (démo ou réelle) se déplace entre Conduite et Nav : une seule carte, un seul GPS
+  const mapp = document.querySelector('.mapp');
+  if (p === 'nav') $('navSlot').append(mapp);
+  else if (p === 'drive') document.querySelector('.drive').append(mapp);
+  if (p === 'nav' || p === 'drive') requestAnimationFrame(() => { if (nav.map) sizeRealMap(); });
 }
 document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () => goPage(t.dataset.page)));
 (() => { // balayage gauche / droite
@@ -1653,10 +1714,23 @@ function renderMusic() {
   $('mCover').style.setProperty('--ang', (music.i * 67 + 120) + 'deg');
   const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
   $('mTime').textContent = `${mmss(music.pos)}/${mmss(tr.d)}`;
+  $('bTitle').textContent = tr.t; $('bArtist').textContent = tr.a;
+  $('bProg').style.width = (music.pos / tr.d * 100).toFixed(1) + '%';
+  $('bPos').textContent = mmss(music.pos); $('bDur').textContent = mmss(tr.d);
+  $('bPlayIco').setAttribute('d', music.playing ? 'M3 2h3v10H3zM8 2h3v10H8z' : 'M3 1.5v11L12.5 7z');
+  $('bPlay').setAttribute('aria-label', music.playing ? 'Pause' : 'Lecture');
+  $('bCover').classList.toggle('playing', music.playing);
+  $('bCover').style.setProperty('--ang', (music.i * 67 + 120) + 'deg');
+  [...$('plist').children].forEach((li, i) => li.classList.toggle('on', i === music.i));
 }
+$('plist').innerHTML = TRACKS.map((tr, i) => `<li data-i="${i}"><span>${tr.t} · <span class="label" style="display:inline">${tr.a}</span></span><small>${Math.floor(tr.d / 60)}:${String(tr.d % 60).padStart(2, '0')}</small></li>`).join('');
+$('plist').addEventListener('click', e => { const li = e.target.closest('li'); if (!li) return; music.i = +li.dataset.i; music.pos = 0; music.playing = true; renderMusic(); });
 const mNext = d => { music.i = (music.i + d + TRACKS.length) % TRACKS.length; music.pos = 0; renderMusic(); };
 $('mPlay').addEventListener('click', () => { music.playing = !music.playing; renderMusic(); });
 $('mNext').addEventListener('click', () => mNext(1));
+$('bPlay').addEventListener('click', () => { music.playing = !music.playing; renderMusic(); });
+$('bNext').addEventListener('click', () => mNext(1));
+$('bPrev').addEventListener('click', () => mNext(-1));
 $('mPrev').addEventListener('click', () => mNext(-1));
 setInterval(() => { if (music.playing) { music.pos++; if (music.pos >= TRACKS[music.i].d) mNext(1); else renderMusic(); } }, 1000);
 renderMusic();
@@ -1737,7 +1811,7 @@ function answer(q) {
     source = source === sim ? none : sim; setObdUi();
     return source === sim ? 'Mode démo activé : données simulées.' : 'Mode démo désactivé.';
   }
-  const pageWord = /conduite|compteur/.test(t) ? 'drive' : /moteur|hologramme|capteur/.test(t) ? 'motor' : /perf|chrono/.test(t) ? 'perf' : /garage|entretien|carnet|trajets/.test(t) ? 'garage' : null;
+  const pageWord = /conduite|compteur/.test(t) ? 'drive' : /carte|gps|navigation|musique|lecteur/.test(t) ? 'nav' : /moteur|hologramme|capteur/.test(t) ? 'motor' : /perf|chrono/.test(t) ? 'perf' : /garage|entretien|carnet|trajets/.test(t) ? 'garage' : null;
   if (/\b(montre|affiche|ouvre|va sur|page)\b/.test(t) && pageWord) { goPage(pageWord); return 'Voilà, monsieur.'; }
   if (/diag|code|defaut|panne|voyant/.test(t)) { runDiag(); return 'Je lance le diagnostic. Deux secondes.'; }
   if (/bilan|fin du trajet|terminer/.test(t)) { endTrip('Bilan demandé'); return null; }
@@ -1892,19 +1966,21 @@ function frame(now) {
       $('oil').textContent = fr(s.oil); tile('tOil', (s.oil - 20) / 110, st.oil(s.oil));
       $('batt').textContent = fr(s.batt, 1); tile('tBatt', (s.batt - 11) / 4, st.batt(s.batt));
       $('soot').textContent = fr(s.soot); tile('tDpf', s.soot / 100, st.dpf(s.soot, s.regen));
+    } else if (page === 'motor') renderSensors();
+    else if (page === 'perf') renderPerf();
+    if (page === 'drive' || page === 'nav') {
       const n = navInfo();
       $('turnDist').textContent = fmtDist(n.dist); $('turnStreet').textContent = n.street;
       if (n.label) $('etaLbl').textContent = n.label;
       $('turnIco').setAttribute('d', ICONS[n.kind]);
       $('eta').textContent = n.eta; $('remain').textContent = fmtDist(n.remain);
-    } else if (page === 'motor') renderSensors();
-    else if (page === 'perf') renderPerf();
+    }
     alerts(s, now);
   }
   slowAcc += dt;
   if (slowAcc >= 1) { slowAcc = 0; renderTrip(); }
 
-  if (page === 'drive' && !nav.map) drawMap(dt, s.speed || 0);
+  if ((page === 'drive' || page === 'nav') && !nav.map) drawMap(dt, s.speed || 0);
   if (page === 'motor') { tHolo += dt; drawHolo($('holoCar'), tHolo, { zones: true, labels: true }); }
   fx.draw(dt, s);
   requestAnimationFrame(frame);
