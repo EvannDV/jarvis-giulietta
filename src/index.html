@@ -308,6 +308,9 @@ button{cursor:pointer}
 .cover i{width:4px;height:30%;background:var(--text);opacity:.9;border-radius:1px}
 .cover i:nth-child(2){height:55%}.cover i:nth-child(3){height:40%}.cover i:nth-child(4){height:65%}.cover i:nth-child(5){height:25%}
 .cover.playing i{animation:eq .8s ease-in-out infinite alternate}
+.cover.art,.bigcover.art{background-size:cover;background-position:center}
+.cover.art i,.bigcover.art i{display:none}
+.mt,.ptrack{cursor:pointer}
 .cover.playing i:nth-child(2){animation-delay:-.25s}.cover.playing i:nth-child(3){animation-delay:-.5s}.cover.playing i:nth-child(4){animation-delay:-.15s}.cover.playing i:nth-child(5){animation-delay:-.4s}
 @keyframes eq{0%{height:12%}50%{height:85%}100%{height:35%}}
 .minfo{display:flex;flex-direction:column;gap:5px;min-width:0}
@@ -764,39 +767,98 @@ class SimSource {
     return s;
   }
 }
-/* ---------- Vraie source OBD : adaptateur ELM327 Bluetooth basse conso (OBDLink CX) via Web Bluetooth ----------
-   Ne marche que dans Chrome Android, sur une page https (pas dans la prévisualisation). */
+/* ---------- Vraie source OBD : adaptateur ELM327 Bluetooth basse conso (OBDLink CX) ----------
+   Deux liaisons possibles, même protocole derrière :
+   - WebBleLink : Chrome Android (page https)
+   - NativeBleLink : appli Android Jarvis (plugin Capacitor Bluetooth LE), avec reconnexion automatique au démarrage */
 const hex2 = n => n.toString(16).toUpperCase().padStart(2, '0');
-class ObdSource {
-  static SVC = [0xfff0, 0xffe0, 0x18f0, 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
-  constructor() {
-    this.s = { speed: 0, rpm: 0, gear: 0, boost: 0, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: 0, lph: 0, ext: null, accel: 0 };
-    this.raw = {}; this.sup = new Set(); this.buf = ''; this.pending = null; this.connected = false; this.slowI = 0; this.accRaw = 0; this.label = 'OBD';
-  }
-  async connect() {
+const BLE_SVC = ['0000fff0-0000-1000-8000-00805f9b34fb', '0000ffe0-0000-1000-8000-00805f9b34fb', '000018f0-0000-1000-8000-00805f9b34fb', 'e7810a71-73ae-499d-8c15-faa9aef0c3f2'];
+const NATIVE = !!(window.Capacitor && typeof window.Capacitor.isNativePlatform === 'function' && window.Capacitor.isNativePlatform());
+class WebBleLink {
+  async pick() {
     if (!navigator.bluetooth) throw new Error('Ce navigateur ne gère pas le Bluetooth. Il faut Chrome sur Android.');
-    this.dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: ObdSource.SVC });
-    this.label = this.dev.name || 'OBD';
-    this.dev.addEventListener('gattserverdisconnected', () => this.lostLink());
-    await this.open();
+    this.dev = await navigator.bluetooth.requestDevice({ acceptAllDevices: true, optionalServices: BLE_SVC });
+    this.id = this.dev.id; this.name = this.dev.name || 'OBD';
+    this.dev.addEventListener('gattserverdisconnected', () => this.onLost && this.onLost());
   }
-  async open() {
-    this.wr = this.nt = null; this.buf = ''; this.pending = null;
+  async open(onText) {
     const server = await this.dev.gatt.connect();
-    for (const u of ObdSource.SVC) {
+    let wr = null, nt = null;
+    for (const u of BLE_SVC) {
       try {
         const chs = await (await server.getPrimaryService(u)).getCharacteristics();
-        for (const c of chs) {
-          if (!this.wr && (c.properties.write || c.properties.writeWithoutResponse)) this.wr = c;
-          if (!this.nt && (c.properties.notify || c.properties.indicate)) this.nt = c;
-        }
-        if (this.wr && this.nt) break;
+        wr = chs.find(c => c.properties.write || c.properties.writeWithoutResponse) || null;
+        nt = chs.find(c => c.properties.notify || c.properties.indicate) || null;
+        if (wr && nt) break;
       } catch (e) {}
     }
-    if (!this.wr || !this.nt) throw new Error("adaptateur trouvé, mais son service Bluetooth n'est pas reconnu.");
-    await this.nt.startNotifications();
+    if (!wr || !nt) throw new Error("adaptateur trouvé, mais son service Bluetooth n'est pas reconnu.");
+    await nt.startNotifications();
     const dec = new TextDecoder();
-    this.nt.addEventListener('characteristicvaluechanged', e => this.onData(dec.decode(e.target.value)));
+    if (this.nt && this.handler) this.nt.removeEventListener('characteristicvaluechanged', this.handler);
+    this.handler = e => onText(dec.decode(e.target.value));
+    nt.addEventListener('characteristicvaluechanged', this.handler);
+    this.wr = wr; this.nt = nt;
+  }
+  write(str) {
+    const d = new TextEncoder().encode(str);
+    return this.wr.properties.writeWithoutResponse ? this.wr.writeValueWithoutResponse(d) : this.wr.writeValue(d);
+  }
+}
+class NativeBleLink {
+  constructor() { this.P = window.Capacitor.Plugins.BluetoothLe; this.subs = []; }
+  async init() { if (!this.ready) { await this.P.initialize({ androidNeverForLocation: true }); this.ready = true; } }
+  use(id, name) { this.id = id; this.name = name || 'OBD'; }
+  async pick() {
+    await this.init();
+    const d = await this.P.requestDevice({});
+    this.use(d.deviceId, d.name);
+  }
+  async open(onText) {
+    await this.init();
+    for (const x of this.subs) { try { await x.remove(); } catch (e) {} }
+    this.subs = [];
+    try { await this.P.disconnect({ deviceId: this.id }); } catch (e) {}
+    this.subs.push(await this.P.addListener('disconnected|' + this.id, () => this.onLost && this.onLost()));
+    await this.P.connect({ deviceId: this.id, timeout: 8000 });
+    const { services } = await this.P.getServices({ deviceId: this.id });
+    const known = u => BLE_SVC.includes(u.toLowerCase());
+    let pickd = null;
+    for (const sv of [...services.filter(x => known(x.uuid)), ...services.filter(x => !known(x.uuid))]) {
+      const chs = sv.characteristics || [];
+      const w = chs.find(c => c.properties && (c.properties.write || c.properties.writeWithoutResponse));
+      const n = chs.find(c => c.properties && (c.properties.notify || c.properties.indicate));
+      if (w && n) { pickd = { s: sv.uuid.toLowerCase(), w: w.uuid.toLowerCase(), wnr: !!w.properties.writeWithoutResponse, n: n.uuid.toLowerCase() }; break; }
+    }
+    if (!pickd) throw new Error("adaptateur trouvé, mais son service Bluetooth n'est pas reconnu.");
+    const hexToText = h => (h.replace(/[^0-9a-f]/gi, '').match(/../g) || []).map(x => String.fromCharCode(parseInt(x, 16))).join('');
+    this.subs.push(await this.P.addListener(`notification|${this.id}|${pickd.s}|${pickd.n}`, ev => onText(hexToText((ev && ev.value) || ''))));
+    await this.P.startNotifications({ deviceId: this.id, service: pickd.s, characteristic: pickd.n });
+    this.ch = pickd;
+  }
+  write(str) {
+    const value = [...str].map(c => c.charCodeAt(0).toString(16).padStart(2, '0')).join('');
+    const o = { deviceId: this.id, service: this.ch.s, characteristic: this.ch.w, value };
+    return this.ch.wnr ? this.P.writeWithoutResponse(o) : this.P.write(o);
+  }
+}
+class ObdSource {
+  constructor(link) {
+    this.link = link || (NATIVE ? new NativeBleLink() : new WebBleLink());
+    this.link.onLost = () => this.lostLink();
+    this.s = { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: null, lph: null, ext: null, accel: 0 };
+    this.raw = {}; this.sup = new Set(); this.buf = ''; this.pending = null; this.connected = false; this.slowI = 0; this.accRaw = 0; this.label = this.link.name || 'OBD';
+  }
+  async connect() {
+    await this.link.pick();
+    this.label = this.link.name || 'OBD';
+    await this.open();
+  }
+  // Appli Android : adaptateur déjà connu, on se connecte dès qu'il répond (contact mis)
+  startAuto() { this.lost = true; this.retry(); }
+  async open() {
+    this.buf = ''; this.pending = null;
+    await this.link.open(t => this.onData(t));
     for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATSP0']) await this.cmd(c, 2500);
     await this.cmd('0100', 8000); // recherche du protocole (CAN 500 kb/s sur la Giulietta)
     if (!this.sup.size) for (const base of [0x00, 0x20, 0x40]) {
@@ -817,11 +879,13 @@ class ObdSource {
     this.retry();
   }
   async retry() {
+    if (this.retrying) return; this.retrying = true;
     while (this.lost) {
       await new Promise(r => setTimeout(r, 4000));
-      if (!this.lost) return;
+      if (!this.lost) break;
       try { await this.open(); if (this.onBack) this.onBack(); } catch (e) {}
     }
+    this.retrying = false;
   }
   onData(txt) {
     this.buf += txt; const i = this.buf.indexOf('>');
@@ -832,8 +896,7 @@ class ObdSource {
   cmd(c, timeout = 1200) {
     return new Promise(res => {
       this.pending = { res, t: setTimeout(() => { this.pending = null; res(''); }, timeout) };
-      const data = new TextEncoder().encode(c + '\r');
-      (this.wr.properties.writeWithoutResponse ? this.wr.writeValueWithoutResponse(data) : this.wr.writeValue(data))
+      Promise.resolve().then(() => this.link.write(c + '\r'))
         .catch(() => { if (this.pending) { clearTimeout(this.pending.t); this.pending = null; } res(''); });
     });
   }
@@ -877,7 +940,7 @@ class NoneSource {
   constructor() { this.s = { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: null, lph: null, ext: null, accel: 0 }; }
   step() { return this.s; }
 }
-const HOSTED = !!window.JARVIS_HOSTED; // vrai sur la version installée (GitHub Pages), faux dans la prévisualisation
+const HOSTED = !!window.JARVIS_HOSTED || NATIVE; // vrai sur la version installée (GitHub Pages ou appli Android), faux dans la prévisualisation
 const sim = new SimSource(), none = new NoneSource();
 let source = HOSTED ? none : sim;
 const S = () => source.s;
@@ -1490,29 +1553,45 @@ document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click'
 }));
 function setObdUi() {
   const obd = source instanceof ObdSource, live = obd && source.connected;
-  $('obdBtn').textContent = live ? 'OBD · ' + source.label : obd ? 'OBD · reconnexion…' : source === sim ? 'SIM · connecter OBD' : 'Connecter OBD';
+  $('obdBtn').textContent = live ? 'OBD · ' + source.label : obd ? (source.everConnected ? 'OBD · reconnexion…' : 'OBD · recherche…') : source === sim ? 'SIM · connecter OBD' : 'Connecter OBD';
   $('obdBtn').classList.toggle('live', live);
   $('launchBtn').hidden = source !== sim;
 }
+function adoptObd(obd) {
+  source = obd;
+  const hello = () => `Liaison établie avec ${obd.label}. ${obd.sup.size} données disponibles${obd.sup.has('5C') ? ", dont la température d'huile" : ", mais pas la température d'huile en standard"}. Je prends les commandes, monsieur.`;
+  obd.onLost = () => { setObdUi(); say('Liaison OBD perdue. Je tente de me reconnecter, monsieur.'); };
+  obd.onBack = () => { const first = !obd.everConnected; obd.everConnected = true; setObdUi(); say(first ? hello() : 'Liaison OBD rétablie.'); };
+  setObdUi();
+  return hello;
+}
 $('obdBtn').addEventListener('click', async () => {
   if (source instanceof ObdSource && source.connected) { say(`Connecté à ${source.label}, ${source.sup.size} données disponibles.`); return; }
-  if (source instanceof ObdSource) source.lost = false; // abandonne l'ancienne reconnexion et choisit un adaptateur
+  if (source instanceof ObdSource) source.lost = false; // abandonne l'ancienne recherche et choisit un adaptateur
   const obd = new ObdSource();
   $('obdBtn').textContent = 'connexion…';
   try {
     await obd.connect();
-    source = obd;
-    obd.onLost = () => { setObdUi(); say('Liaison OBD perdue. Je tente de me reconnecter, monsieur.'); };
-    obd.onBack = () => { setObdUi(); say('Liaison OBD rétablie.'); };
-    setObdUi();
-    say(`Liaison établie avec ${obd.label}. ${obd.sup.size} données disponibles${obd.sup.has('5C') ? ", dont la température d'huile" : ", mais pas la température d'huile en standard"}. Je prends les commandes, monsieur.`);
+    const hello = adoptObd(obd); obd.everConnected = true; setObdUi();
+    store.set('obdDevice', { id: obd.link.id, name: obd.link.name });
+    say(hello() + (NATIVE ? " Je m'y reconnecterai tout seul aux prochains démarrages." : ''));
   } catch (e) {
+    if (source instanceof ObdSource && !source.connected && !source.lost) source.startAuto();
     setObdUi();
-    say(e.name === 'NotFoundError' ? 'Connexion annulée.'
-      : e.name === 'SecurityError' || /permission|policy|disallow|not allowed/i.test(e.message) ? 'Le Bluetooth est bloqué dans cette prévisualisation. Il fonctionnera depuis la version installée sur la tablette.'
+    say(e.name === 'NotFoundError' || /cancel|annul/i.test(e.message) ? 'Connexion annulée.'
+      : e.name === 'SecurityError' || /permission|policy|disallow|not allowed/i.test(e.message) ? (NATIVE ? "J'ai besoin de l'autorisation Bluetooth, monsieur. Acceptez-la quand Android la demande." : 'Le Bluetooth est bloqué dans cette prévisualisation. Il fonctionnera depuis la version installée sur la tablette.')
       : 'Connexion impossible : ' + e.message);
   }
 });
+// Appli Android : reconnexion automatique au dernier adaptateur utilisé
+if (NATIVE) {
+  const saved = store.get('obdDevice', null);
+  if (saved && saved.id) {
+    const link = new NativeBleLink(); link.use(saved.id, saved.name);
+    const obd = new ObdSource(link); obd.label = saved.name || 'OBD';
+    adoptObd(obd); obd.startAuto();
+  }
+}
 $('launchBtn').addEventListener('click', () => { sim.startLaunch(); say(pick(['Essai lancé. Arrêt complet, puis pied au plancher.', 'Préparation du départ arrêté. Accrochez-vous, monsieur.'])); });
 function perfFinish(mode, t) {
   const list = perf.best[mode], prevBest = list[0] ? list[0].t : null;
@@ -1704,35 +1783,69 @@ const TRACKS = [
   { t: 'Brume de mer', a: 'Station Service', d: 228 }
 ];
 const music = { i: 0, pos: 0, playing: false };
+// Appli Android : JarvisMedia lit et pilote le lecteur en cours (Spotify, YouTube Music, Deezer…)
+const MEDIA = NATIVE ? window.Capacitor.Plugins.JarvisMedia : null;
+let ms = { granted: false, active: false, at: Date.now() };
+const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
+function musicView() {
+  if (!MEDIA) { const tr = TRACKS[music.i]; return { title: tr.t, artist: tr.a, pos: music.pos, dur: tr.d, playing: music.playing, art: null, ang: music.i * 67 + 120 }; }
+  if (!ms.granted) return { title: 'Accès à la musique', artist: 'Touchez ici pour autoriser Jarvis', pos: 0, dur: 0, playing: false, art: null, ang: 135 };
+  if (!ms.active) return { title: 'Aucune musique en cours', artist: 'Lancez Spotify, YouTube Music, Deezer…', pos: 0, dur: 0, playing: false, art: null, ang: 135 };
+  const pos = ((ms.position || 0) + (ms.playing ? Date.now() - ms.at : 0)) / 1000, dur = (ms.duration || 0) / 1000;
+  return { title: ms.title || 'Titre inconnu', artist: [ms.artist, ms.app].filter(Boolean).join(' · '), pos: dur ? Math.min(pos, dur) : pos, dur, playing: !!ms.playing, art: ms.art || null, ang: 135 };
+}
+function paintCover(el, v) {
+  el.classList.toggle('playing', v.playing);
+  el.classList.toggle('art', !!v.art);
+  el.style.backgroundImage = v.art ? `url("${v.art}")` : '';
+  el.style.setProperty('--ang', v.ang + 'deg');
+}
 function renderMusic() {
-  const tr = TRACKS[music.i];
-  $('mTitle').textContent = tr.t; $('mArtist').textContent = tr.a;
-  $('mProg').style.width = (music.pos / tr.d * 100).toFixed(1) + '%';
-  $('mPlayIco').setAttribute('d', music.playing ? 'M3 2h3v10H3zM8 2h3v10H8z' : 'M3 1.5v11L12.5 7z');
-  $('mPlay').setAttribute('aria-label', music.playing ? 'Pause' : 'Lecture');
-  $('mCover').classList.toggle('playing', music.playing);
-  $('mCover').style.setProperty('--ang', (music.i * 67 + 120) + 'deg');
-  const mmss = x => Math.floor(x / 60) + ':' + String(Math.floor(x % 60)).padStart(2, '0');
-  $('mTime').textContent = `${mmss(music.pos)}/${mmss(tr.d)}`;
-  $('bTitle').textContent = tr.t; $('bArtist').textContent = tr.a;
-  $('bProg').style.width = (music.pos / tr.d * 100).toFixed(1) + '%';
-  $('bPos').textContent = mmss(music.pos); $('bDur').textContent = mmss(tr.d);
-  $('bPlayIco').setAttribute('d', music.playing ? 'M3 2h3v10H3zM8 2h3v10H8z' : 'M3 1.5v11L12.5 7z');
-  $('bPlay').setAttribute('aria-label', music.playing ? 'Pause' : 'Lecture');
-  $('bCover').classList.toggle('playing', music.playing);
-  $('bCover').style.setProperty('--ang', (music.i * 67 + 120) + 'deg');
+  const v = musicView(), pct = v.dur ? (v.pos / v.dur * 100).toFixed(1) + '%' : '0%';
+  const ico = v.playing ? 'M3 2h3v10H3zM8 2h3v10H8z' : 'M3 1.5v11L12.5 7z';
+  $('mTitle').textContent = v.title; $('mArtist').textContent = v.artist;
+  $('mProg').style.width = pct; $('mPlayIco').setAttribute('d', ico);
+  $('mPlay').setAttribute('aria-label', v.playing ? 'Pause' : 'Lecture');
+  paintCover($('mCover'), v);
+  $('mTime').textContent = v.dur ? `${mmss(v.pos)}/${mmss(v.dur)}` : '';
+  $('bTitle').textContent = v.title; $('bArtist').textContent = v.artist;
+  $('bProg').style.width = pct;
+  $('bPos').textContent = v.dur ? mmss(v.pos) : ''; $('bDur').textContent = v.dur ? mmss(v.dur) : '';
+  $('bPlayIco').setAttribute('d', ico);
+  $('bPlay').setAttribute('aria-label', v.playing ? 'Pause' : 'Lecture');
+  paintCover($('bCover'), v);
   [...$('plist').children].forEach((li, i) => li.classList.toggle('on', i === music.i));
 }
-$('plist').innerHTML = TRACKS.map((tr, i) => `<li data-i="${i}"><span>${tr.t} · <span class="label" style="display:inline">${tr.a}</span></span><small>${Math.floor(tr.d / 60)}:${String(tr.d % 60).padStart(2, '0')}</small></li>`).join('');
-$('plist').addEventListener('click', e => { const li = e.target.closest('li'); if (!li) return; music.i = +li.dataset.i; music.pos = 0; music.playing = true; renderMusic(); });
+function musicCmd(action) { // action : toggle | play | pause | next | previous
+  if (MEDIA) {
+    if (!ms.granted) { MEDIA.openSettings(); return; }
+    MEDIA.control({ action }).catch(() => say("Aucune appli de musique ne joue pour l'instant, monsieur."));
+    return;
+  }
+  if (action === 'next') mNext(1); else if (action === 'previous') mNext(-1);
+  else music.playing = action === 'toggle' ? !music.playing : action === 'play';
+  renderMusic();
+}
 const mNext = d => { music.i = (music.i + d + TRACKS.length) % TRACKS.length; music.pos = 0; renderMusic(); };
-$('mPlay').addEventListener('click', () => { music.playing = !music.playing; renderMusic(); });
-$('mNext').addEventListener('click', () => mNext(1));
-$('bPlay').addEventListener('click', () => { music.playing = !music.playing; renderMusic(); });
-$('bNext').addEventListener('click', () => mNext(1));
-$('bPrev').addEventListener('click', () => mNext(-1));
-$('mPrev').addEventListener('click', () => mNext(-1));
-setInterval(() => { if (music.playing) { music.pos++; if (music.pos >= TRACKS[music.i].d) mNext(1); else renderMusic(); } }, 1000);
+if (MEDIA) {
+  $('plist').hidden = true;
+  MEDIA.addListener('media', st => { ms = Object.assign({}, st, { at: Date.now() }); renderMusic(); });
+  MEDIA.getState().then(st => { ms = Object.assign({}, st, { at: Date.now() }); renderMusic(); }).catch(() => {});
+  ['.mt', '.ptrack'].forEach(sel => document.querySelector(sel).addEventListener('click', () => { if (!ms.granted) MEDIA.openSettings(); }));
+} else {
+  $('plist').innerHTML = TRACKS.map((tr, i) => `<li data-i="${i}"><span>${tr.t} · <span class="label" style="display:inline">${tr.a}</span></span><small>${Math.floor(tr.d / 60)}:${String(tr.d % 60).padStart(2, '0')}</small></li>`).join('');
+  $('plist').addEventListener('click', e => { const li = e.target.closest('li'); if (!li) return; music.i = +li.dataset.i; music.pos = 0; music.playing = true; renderMusic(); });
+}
+$('mPlay').addEventListener('click', () => musicCmd('toggle'));
+$('bPlay').addEventListener('click', () => musicCmd('toggle'));
+$('mNext').addEventListener('click', () => musicCmd('next'));
+$('bNext').addEventListener('click', () => musicCmd('next'));
+$('mPrev').addEventListener('click', () => musicCmd('previous'));
+$('bPrev').addEventListener('click', () => musicCmd('previous'));
+setInterval(() => {
+  if (MEDIA) { if (ms.playing) renderMusic(); return; }
+  if (music.playing) { music.pos++; if (music.pos >= TRACKS[music.i].d) mNext(1); else renderMusic(); }
+}, 1000);
 renderMusic();
 
 /* ============================================================
@@ -1781,6 +1894,8 @@ function addMsg(text, me) {
 const say = t => addMsg(t);
 function speak(text) {
   try {
+    const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
+    if (tts) { tts.speak({ text, lang: 'fr-FR', rate: 1.05, pitch: 0.9, queueStrategy: 0 }).catch(() => {}); return; }
     const u = new SpeechSynthesisUtterance(text); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9;
     const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('fr')); if (v) u.voice = v;
     speechSynthesis.cancel(); speechSynthesis.speak(u);
@@ -1824,9 +1939,12 @@ function answer(q) {
     return b0 || b8 ? `Vos records : ${b0 ? fr(b0.t, 1) + ' s sur le 0 à 100' : 'pas encore de 0 à 100'}${b8 ? ', ' + fr(b8.t, 1) + ' s sur le 80 à 120' : ''}.` : 'Aucun chrono enregistré. Page Perf, puis un essai, et je m\'occupe du reste.';
   }
   if (/musique|chanson|titre|suivant|pause|lecture|joue|play/.test(t)) {
-    if (/suivant|next|change/.test(t)) mNext(1); else if (/pause|stop|coupe/.test(t)) music.playing = false; else music.playing = true;
-    renderMusic(); const tr = TRACKS[music.i];
-    return music.playing ? `${tr.t}, de ${tr.a}. Excellent choix, si je puis dire.` : 'Musique en pause.';
+    const act = /precedent|avant/.test(t) ? 'previous' : /suivant|next|change/.test(t) ? 'next' : /pause|stop|coupe/.test(t) ? 'pause' : 'play';
+    musicCmd(act);
+    if (MEDIA && !ms.granted) return "J'ai besoin de l'accès à la musique. Activez Jarvis dans la page qui vient de s'ouvrir.";
+    if (act === 'pause') return 'Musique en pause.';
+    setTimeout(() => { const v = musicView(); if (v.playing || !MEDIA) say(`${v.title}${v.artist ? ', ' + v.artist.split(' · ')[0] : ''}. Excellent choix, si je puis dire.`); }, MEDIA ? 1200 : 0);
+    return null;
   }
   if (/dynamic|sport/.test(t)) { setDna('D'); return null; }
   if (/pluie|all.?weather|neige|verglas/.test(t)) { setDna('A'); return null; }
@@ -1860,7 +1978,7 @@ document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', (
 $('voice').addEventListener('click', e => {
   voiceOn = !voiceOn; e.currentTarget.setAttribute('aria-pressed', voiceOn);
   e.currentTarget.textContent = voiceOn ? 'Voix · on' : 'Voix';
-  if (voiceOn) speak('Voix activée.'); else try { speechSynthesis.cancel(); } catch (_) {}
+  if (voiceOn) speak('Voix activée.'); else try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (_) {}
 });
 $('fs').addEventListener('click', async () => {
   try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch (e) {}

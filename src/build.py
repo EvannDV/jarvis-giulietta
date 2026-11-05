@@ -1,7 +1,10 @@
 #!/usr/bin/env python3
-"""Construit la version installable (racine du dépôt) à partir de src/index.html.
-Usage : python3 src/build.py   puis commit + push : GitHub Pages publie la racine."""
+"""Construit, à partir de src/index.html :
+- la version web installable (racine du dépôt, publiée par GitHub Pages) ;
+- la version de l'appli Android (dossier www/, emballé par Capacitor).
+Usage : python3 src/build.py"""
 import pathlib
+import shutil
 import time
 
 SRC = pathlib.Path(__file__).resolve().parent
@@ -10,7 +13,10 @@ ROOT = SRC.parent
 page = (SRC / 'index.html').read_text(encoding='utf-8')
 version = time.strftime('%Y%m%d-%H%M%S')
 
-head = '''<!doctype html>
+def head(native):
+    boot = ("window.JARVIS_HOSTED = true; window.JARVIS_NATIVE = true;" if native else
+            "window.JARVIS_HOSTED = true;\nif ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js'));")
+    return '''<!doctype html>
 <html lang="fr">
 <head>
 <meta charset="utf-8">
@@ -22,14 +28,21 @@ head = '''<!doctype html>
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}body{margin:0}[hidden]{display:none!important}</style>
 <script>
-window.JARVIS_HOSTED = true;
-if ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js'));
+__BOOT__
 </script>
 </head>
 <body>
-'''
+'''.replace('__BOOT__', boot)
 
-(ROOT / 'index.html').write_text(head + page + '\n</body>\n</html>\n', encoding='utf-8')
+(ROOT / 'index.html').write_text(head(False) + page + '\n</body>\n</html>\n', encoding='utf-8')
 sw = (SRC / 'sw.template.js').read_text(encoding='utf-8').replace('__VERSION__', version)
 (ROOT / 'sw.js').write_text(sw, encoding='utf-8')
-print('Version installable construite :', version)
+# Appli Android : mêmes fichiers, sans service worker (tout est déjà dans l'APK)
+www = ROOT / 'www'
+shutil.rmtree(www, ignore_errors=True)
+www.mkdir()
+(www / 'index.html').write_text(head(True) + page + '\n</body>\n</html>\n', encoding='utf-8')
+for d in ('lib', 'icons'):
+    shutil.copytree(ROOT / d, www / d)
+shutil.copy(ROOT / 'manifest.webmanifest', www / 'manifest.webmanifest')
+print('Version web + appli Android construites :', version)

@@ -1,0 +1,85 @@
+# Fabrique l'appli Android (APK) à chaque envoi sur main et la publie
+# dans la release « Jarvis · appli Android » du dépôt.
+name: Appli Android
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: apk
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - uses: android-actions/setup-android@v3
+
+      - name: Dépendances
+        run: npm ci
+
+      - name: Interface (web + www)
+        run: python3 src/build.py
+
+      - name: Synchronisation Capacitor
+        run: npx cap sync android
+
+      - name: Clé de signature (secret GitHub)
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore
+          else
+            echo "::warning::Secret ANDROID_KEYSTORE_BASE64 absent : APK signé avec une clé jetable, les mises à jour demanderont de désinstaller."
+          fi
+
+      - name: Compilation de l'APK
+        working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease --no-daemon --stacktrace
+
+      - name: Renommage
+        run: cp android/app/build/outputs/apk/release/app-release.apk Jarvis.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Jarvis-apk
+          path: Jarvis.apk
+
+      - name: Déplacement de l'étiquette « apk » sur ce commit
+        run: |
+          git tag -f apk
+          git push -f origin apk
+
+      - name: Publication
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: apk
+          name: Jarvis · appli Android
+          make_latest: true
+          files: Jarvis.apk
+          body: |
+            Dernière version de l'appli Jarvis (build ${{ github.run_number }}, commit ${{ github.sha }}).
+            Sur la tablette : téléchargez **Jarvis.apk** ci-dessous, ouvrez-le et installez.
+            Les mises à jour s'installent par-dessus l'ancienne version.

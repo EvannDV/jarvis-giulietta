@@ -1,0 +1,18 @@
+{
+  "appId": "fr.evanndv.jarvis",
+  "appName": "Jarvis",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#02070c"
+  },
+  "plugins": {
+    "BluetoothLe": {
+      "displayStrings": {
+        "scanning": "Recherche de l'adaptateur OBD…",
+        "cancel": "Annuler",
+        "availableDevices": "Appareils Bluetooth",
+        "noDeviceFound": "Aucun adaptateur trouvé"
+      }
+    }
+  }
+}

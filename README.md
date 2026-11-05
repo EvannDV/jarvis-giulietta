@@ -2,6 +2,28 @@
 
 Tableau de bord façon Jarvis pour Alfa Romeo Giulietta 2.0 JTDM, sur tablette Android, avec un adaptateur OBDLink CX.
 
+Deux façons de l'utiliser :
+- **L'appli Android (recommandé)** : connexion OBD automatique, vraie musique, écran toujours allumé.
+- **La version web** dans Chrome (GitHub Pages) : rien à installer, mais connexion OBD à la main à chaque démarrage.
+
+## Appli Android
+
+### Installer
+1. Sur la tablette, ouvrez https://github.com/EvannDV/jarvis-giulietta/releases/latest et touchez **Jarvis.apk**.
+2. Ouvrez le fichier téléchargé. Android demande d'autoriser l'installation depuis Chrome (ou « Fichiers ») : acceptez, puis **Installer**.
+3. Pour une mise à jour, refaites la même chose : la nouvelle version s'installe par-dessus, vos réglages restent.
+
+### Premier lancement
+- **Position** : acceptez (GPS et navigation).
+- **Appareils à proximité** : acceptez (Bluetooth OBD).
+- **OBD** : contact mis, touchez **Connecter OBD** et choisissez l'OBDLink CX. C'est la seule fois : ensuite Jarvis s'y reconnecte tout seul dès que vous mettez le contact.
+- **Musique** : touchez le titre dans le lecteur (« Accès à la musique »). Android ouvre la page « Accès aux notifications » : activez **Jarvis**. Jarvis affiche alors le titre, l'artiste et la pochette de Spotify, YouTube Music, Deezer… et les boutons pilotent le lecteur. Jarvis ne lit aucune notification.
+- **Voix** : bouton Voix dans la console. Elle utilise la synthèse vocale d'Android (voix française à installer dans Paramètres → Synthèse vocale si besoin).
+
+L'APK est fabriqué automatiquement par GitHub Actions à chaque modification (onglet **Actions** du dépôt).
+
+## Version web
+
 ## Mettre en ligne sur GitHub Pages (une seule fois)
 
 Ce dépôt contient déjà tous les fichiers : il suffit de faire l'étape 3. L'appli sera sur `https://evanndv.github.io/jarvis-giulietta/`.
@@ -45,5 +67,9 @@ Sans réseau, le tableau de bord marche normalement. La carte affiche les zones 
 
 ## Pour modifier le projet
 
-- `src/index.html` : le code de l'interface (une seule page).
-- `python3 src/build.py` : génère `index.html` et `sw.js` à la racine, servis par GitHub Pages.
+- `src/index.html` : le code de l'interface (une seule page), partagé par la version web et l'appli.
+- `python3 src/build.py` : génère la version web (`index.html`, `sw.js` à la racine) et `www/` pour l'appli.
+- `android/` : projet Android (Capacitor 8). Code natif dans `android/app/src/main/java/fr/evanndv/jarvis/` :
+  `MainActivity` (plein écran, écran allumé) et `JarvisMediaPlugin` (musique des autres applis).
+- `.github/workflows/android.yml` : compile l'APK et le publie dans les releases.
+- La clé de signature de l'APK n'est pas dans le dépôt : elle est stockée dans les secrets GitHub `ANDROID_KEYSTORE_BASE64` et `ANDROID_KEYSTORE_PASSWORD` (Settings → Secrets and variables → Actions).
