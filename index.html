@@ -340,6 +340,10 @@ button{cursor:pointer}
 .gallery[data-mode="one"] .gal-body{overflow:hidden;display:grid;place-items:center;touch-action:none;cursor:grab}
 .gallery[data-mode="one"] .gal-body img{max-width:100%;max-height:100%;object-fit:contain;transition:transform .25s ease;user-select:none;-webkit-user-drag:none}
 .gal-cap{padding:8px 14px;border-top:1px solid var(--line);font-size:14px;line-height:1.35;color:var(--text);max-height:4.2em;overflow:hidden}
+.routes{display:flex;flex-direction:column;gap:8px}
+.rt{border:1px solid var(--line);padding:8px 10px;display:flex;flex-direction:column;gap:2px}
+.rt.on{border-color:var(--acc);box-shadow:inset 3px 0 0 var(--acc)}
+.rt b{font-family:var(--f-display);font-size:18px}
 .holo .wimg{width:100%;max-height:34vh;object-fit:cover;border:1px solid var(--line)}
 .quota{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .quota > div{border:1px solid var(--line);padding:6px 8px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
@@ -1340,7 +1344,8 @@ const fmtDist = m => m == null ? '--' : m < 1000 ? (Math.round(m / 10) * 10) + '
    NAVIGATION RÉELLE (version installée) : GPS de la tablette, carte OpenStreetMap,
    recherche Nominatim, itinéraires OSRM, consignes en français
    ============================================================ */
-const nav = { map: null, gps: null, heading: 0, rot: 0, route: null, line: null, steps: [], next: 1, dest: null, off: 0, lastReroute: 0, layer: null, said: -1 };
+const nav = { map: null, gps: null, heading: 0, rot: 0, route: null, line: null, steps: [], next: 1, dest: null, off: 0, lastReroute: 0, layer: null, said: -1,
+  opts: { exclude: [], prefer: 'rapide', via: null, alt: null }, alts: [], altIdx: 0 };
 const toRad = d => d * Math.PI / 180;
 function distM(a, b) {
   const R = 6371000, dLa = toRad(b.lat - a.lat), dLo = toRad(b.lon - a.lon);
@@ -1366,6 +1371,7 @@ const MODS = { 'uturn': 'faites demi-tour', 'sharp right': 'tournez franchement 
 function stepText(st) {
   const m = st.maneuver, on = st.name ? ` sur ${st.name}` : '';
   if (m.type === 'arrive') return 'Arrivée à destination';
+  if (m.type === 'etape') return `Étape : ${nav.opts.via ? nav.opts.via.name : 'point de passage'}`;
   if (m.type === 'roundabout' || m.type === 'rotary') { const e = m.exit || 1; return `Au rond-point, prenez la ${e}${e === 1 ? 're' : 'e'} sortie${on}`; }
   if (m.type === 'off ramp') return `Prenez la sortie${on}`;
   if (m.type === 'on ramp' || m.type === 'merge') return `Prenez la bretelle${on}`;
@@ -1374,7 +1380,7 @@ function stepText(st) {
 }
 function stepIcon(st) {
   const m = st.maneuver, mod = m.modifier || '';
-  if (m.type === 'arrive') return 'flag';
+  if (m.type === 'arrive' || m.type === 'etape') return 'flag';
   if (m.type === 'roundabout' || m.type === 'rotary') return 'round';
   return mod === 'uturn' ? 'uturn' : mod.includes('left') ? 'left' : mod.includes('right') ? 'right' : 'straight';
 }
@@ -1430,7 +1436,7 @@ function onFix(p) {
   progressRoute();
 }
 // quiet = appel par l'IA : pas de message, on renvoie le résultat
-async function routeTo(query, quiet) {
+async function routeTo(query, quiet, opts) {
   const fail = raison => { if (!quiet) say(raison); return { ok: false, raison }; };
   if (!HOSTED) return fail('La vraie navigation fonctionne depuis la version installée sur la tablette. Ici, la carte reste en démo.');
   if (!nav.gps) return fail("J'attends le signal GPS, monsieur.");
@@ -1439,24 +1445,96 @@ async function routeTo(query, quiet) {
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=fr&viewbox=${vb}&q=${encodeURIComponent(query)}`).then(r => r.json());
     if (!r.length) return fail(`Je ne trouve pas « ${query} ».`);
     nav.dest = { lat: +r[0].lat, lon: +r[0].lon, name: r[0].name || r[0].display_name.split(',')[0], adresse: r[0].display_name };
+    nav.opts = { exclude: [], prefer: 'rapide', via: null, alt: null };
+    if (opts) await applyRouteOpts(opts);
     const res = await computeRoute(!quiet);
     if (quiet && page !== 'nav' && page !== 'drive') goPage('nav');
     return res;
   } catch (e) { return fail("Je n'arrive pas à joindre le service de cartes. Vérifiez la connexion Internet."); }
 }
+/* Résumé d'un itinéraire : autoroute, péages, grands axes (données OSRM : ref, classes des intersections) */
+function routeSummary(rt) {
+  let moto = 0, toll = false; const axes = {};
+  rt.legs.forEach(l => l.steps.forEach(st => {
+    const cls = new Set((st.intersections || []).flatMap(i => i.classes || []));
+    const ref = (st.ref || '').split(';')[0].trim();
+    if (cls.has('motorway') || /^A\s?\d/.test(ref)) moto += st.distance;
+    if (cls.has('toll')) toll = true;
+    const key = ref || st.name; if (key) axes[key] = (axes[key] || 0) + st.distance;
+  }));
+  const top = Object.entries(axes).filter(([, d]) => d > 1500).sort((a, b) => b[1] - a[1]).slice(0, 4).map(([k, d]) => `${k} (${fmtDist(d)})`);
+  return { distance: fmtDist(rt.distance), duree: fmtDur(rt.duration), autoroute: moto > 500 ? fmtDist(moto) : 'non', peage: toll ? 'oui' : 'non', axes_principaux: top, d: rt.distance, t: rt.duration };
+}
+const pubSummary = r => r && { distance: r.distance, duree: r.duree, autoroute: r.autoroute, peage: r.peage, axes_principaux: r.axes_principaux };
+function describeOpts() {
+  const o = nav.opts, x = [];
+  if (o.exclude.includes('motorway')) x.push('sans autoroute');
+  if (o.exclude.includes('toll')) x.push('sans péage');
+  x.push(o.prefer === 'court' ? 'le plus court' : 'le plus rapide');
+  if (o.via) x.push('en passant par ' + o.via.name);
+  return x.join(', ');
+}
+async function geocodePlace(q) {
+  const g = nav.gps, vb = g ? `&viewbox=${g.lon - 0.7},${g.lat + 0.5},${g.lon + 0.7},${g.lat - 0.5}` : '';
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=fr${vb}&q=${encodeURIComponent(q)}`).then(r => r.json());
+  if (!r.length) throw new Error(`lieu « ${q} » introuvable`);
+  return { lat: +r[0].lat, lon: +r[0].lon, name: r[0].name || r[0].display_name.split(',')[0] };
+}
+async function applyRouteOpts(a) {
+  const o = nav.opts, ex = new Set(o.exclude);
+  if (a.eviter_autoroute != null) a.eviter_autoroute ? ex.add('motorway') : ex.delete('motorway');
+  if (a.eviter_peage != null) a.eviter_peage ? ex.add('toll') : ex.delete('toll');
+  o.exclude = [...ex];
+  if (a.preference) o.prefer = a.preference;
+  if (a.retirer_etape) o.via = null;
+  if (a.passer_par) o.via = await geocodePlace(a.passer_par);
+  o.alt = a.alternative ? a.alternative - 1 : null;
+}
+async function osrm(points, exclude) {
+  let u = `https://router.project-osrm.org/route/v1/driving/${points.map(p => `${p.lon},${p.lat}`).join(';')}?overview=full&geometries=geojson&steps=true`;
+  if (points.length === 2) u += '&alternatives=3';
+  if (exclude.length) u += '&exclude=' + exclude.join(',');
+  return fetch(u).then(r => r.json());
+}
+function flattenSteps(rt) { // plusieurs étapes : l'arrivée intermédiaire devient « étape »
+  const out = [];
+  rt.legs.forEach((l, li) => l.steps.forEach((st, si) => {
+    if (li > 0 && si === 0 && st.maneuver.type === 'depart') return;
+    const c = Object.assign({}, st, { maneuver: Object.assign({}, st.maneuver) });
+    if (li < rt.legs.length - 1 && c.maneuver.type === 'arrive') c.maneuver.type = 'etape';
+    out.push(c);
+  }));
+  return out;
+}
 async function computeRoute(announce) {
-  const g = nav.gps, d = nav.dest; nav.lastReroute = Date.now();
-  const j = await fetch(`https://router.project-osrm.org/route/v1/driving/${g.lon},${g.lat};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=true`).then(r => r.json());
+  const g = nav.gps, d = nav.dest, o = nav.opts; nav.lastReroute = Date.now();
+  const pts = [g, ...(o.via ? [o.via] : []), d];
+  // le serveur gratuit n'accepte peut-être pas toutes les combinaisons d'exclusion : on dégrade proprement
+  let j = await osrm(pts, o.exclude), lost = null;
+  if (j.code !== 'Ok' && o.exclude.length > 1) { j = await osrm(pts, ['motorway']); lost = 'les péages ne peuvent pas être exclus en plus des autoroutes, seules les autoroutes sont évitées'; }
+  if (j.code !== 'Ok' && o.exclude.length) { j = await osrm(pts, []); lost = "le serveur d'itinéraires gratuit ne permet pas cette exclusion : itinéraire normal"; }
   if (j.code !== 'Ok' || !j.routes.length) { if (announce) say('Aucun itinéraire trouvé.'); return { ok: false, raison: 'aucun itinéraire trouvé' }; }
-  const rt = j.routes[0];
-  nav.route = rt; nav.steps = rt.legs[0].steps; nav.next = 1; nav.off = 0; nav.said = -1;
+  const routes = j.routes;
+  let idx = 0;
+  if (o.alt != null && routes[o.alt]) idx = o.alt;
+  else if (o.prefer === 'court') idx = routes.reduce((b, r, i) => r.distance < routes[b].distance ? i : b, 0);
+  else idx = routes.reduce((b, r, i) => r.duration < routes[b].duration ? i : b, 0);
+  const rt = routes[idx];
+  nav.alts = routes.map(routeSummary); nav.altIdx = idx;
+  nav.route = rt; nav.steps = flattenSteps(rt); nav.next = 1; nav.off = 0; nav.said = -1;
   nav.line = rt.geometry.coordinates.map(([lo, la]) => [la, lo]);
-  nav.layer.clearLayers();
-  L.polyline(nav.line, { color: T['--acc'], weight: 7, opacity: .95, className: 'route-line' }).addTo(nav.layer);
-  L.circleMarker([d.lat, d.lon], { radius: 9, color: T['--amber'], fillColor: T['--amber'], fillOpacity: 1 }).addTo(nav.layer);
+  if (nav.layer) {
+    nav.layer.clearLayers();
+    routes.forEach((r, i) => { if (i !== idx) L.polyline(r.geometry.coordinates.map(([lo, la]) => [la, lo]), { color: T['--acc-dim'], weight: 5, opacity: .55, dashArray: '8 10' }).addTo(nav.layer); });
+    L.polyline(nav.line, { color: T['--acc'], weight: 7, opacity: .95, className: 'route-line' }).addTo(nav.layer);
+    if (o.via) L.circleMarker([o.via.lat, o.via.lon], { radius: 7, color: T['--acc'], fillColor: T['--bg'] || '#000', fillOpacity: 1, weight: 3 }).addTo(nav.layer);
+    L.circleMarker([d.lat, d.lon], { radius: 9, color: T['--amber'], fillColor: T['--amber'], fillOpacity: 1 }).addTo(nav.layer);
+  }
   const n = realNavInfo();
   if (announce) say(`Itinéraire vers ${d.name} : ${fmtDist(rt.distance)}, environ ${fmtDur(rt.duration)}. Arrivée prévue à ${n.eta}.`);
-  return { ok: true, destination: d.name, adresse: d.adresse, distance: fmtDist(rt.distance), duree: fmtDur(rt.duration), arrivee: n.eta, premiere_consigne: n.street };
+  const res = { ok: true, destination: d.name, adresse: d.adresse, arrivee: n.eta, premiere_consigne: n.street, itineraire: pubSummary(nav.alts[idx]), options: describeOpts(), nombre_itineraires_possibles: routes.length, trafic: 'non pris en compte (pas de données en temps réel)' };
+  if (lost) res.attention = lost;
+  return res;
 }
 function clearRoute() { nav.route = null; nav.dest = null; nav.steps = []; if (nav.layer) nav.layer.clearLayers(); }
 function progressRoute() {
@@ -2102,13 +2180,17 @@ Quand une réponse mérite des détails (liste, explication longue, comparaison)
 Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n'est pas disponible (adaptateur déconnecté ou donnée non transmise par la voiture) : dis-le simplement et n'invente jamais de valeur. Si la source est « simulation », précise que ce sont des données de démonstration.
 N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.
 Photos : pour montrer des photos, appelle chercher_images (actualite=true pour un événement récent ou en cours, false sinon, avec des mots_cles_anglais). Ensuite « zoome », « la 3 », « suivante », « affiche-les toutes », « ferme » passent par l'outil galerie ; « montre-en d'autres » ou « plus de photos » relance chercher_images avec un nombre plus grand. Pour dire ce qu'on voit sur une photo, appelle decrire_image.
+Navigation : pour savoir par où passe l'itinéraire (autoroute, péages, routes), appelle itineraire_details ; pour le modifier (éviter autoroutes ou péages, plus rapide, plus court, passer par une ville, prendre un autre itinéraire), appelle itineraire_options et annonce le temps gagné ou perdu. Les durées ne tiennent pas compte du trafic en temps réel : dis-le si on te parle de bouchons.
 Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.`;
 
 async function gemini(body, models = AI_MODELS()) {
   let lastErr = null;
   const usable = models.filter(aiAvailable);
   if (!usable.length) { const e = new Error('quota gratuit du jour atteint'); e.quota = 'day'; throw e; }
-  for (const m of usable) {
+  // si Google est seulement surchargé (503, délai), un second passage 1,5 s plus tard ; jamais sur une limite de quota
+  for (const m of [...usable, '__pause__', usable[0]]) {
+    if (m === '__pause__') { if (!lastErr || lastErr.quota) break; await new Promise(r => setTimeout(r, 1500)); continue; }
+    if (!aiAvailable(m)) continue;
     const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), /lite/.test(m) ? 9000 : 15000);
     try {
       aiCount(m);
@@ -2214,7 +2296,9 @@ function carState() {
 }
 const AI_TOOLS = [
   { name: 'etat_voiture', description: "Données en temps réel : vitesse, régime, rapport, turbo, températures eau/huile/extérieur, batterie, filtre à particules, conso, mode DNA, page affichée, navigation et musique en cours." },
-  { name: 'naviguer', description: 'Lance le guidage GPS vers une adresse, un lieu ou une ville.', parameters: { type: 'object', properties: { destination: { type: 'string', description: 'Adresse ou lieu, aussi précis que possible' } }, required: ['destination'] } },
+  { name: 'naviguer', description: 'Lance le guidage GPS vers une adresse, un lieu ou une ville, avec des options facultatives.', parameters: { type: 'object', properties: { destination: { type: 'string', description: 'Adresse ou lieu, aussi précis que possible' }, eviter_autoroute: { type: 'boolean' }, eviter_peage: { type: 'boolean' }, preference: { type: 'string', enum: ['rapide', 'court'] }, passer_par: { type: 'string', description: 'Ville ou lieu de passage' } }, required: ['destination'] } },
+  { name: 'itineraire_details', description: "Détails de l'itinéraire en cours et des itinéraires possibles : distance, durée, kilomètres d'autoroute, péages, grands axes (A7, N7…). Affiche la comparaison à l'écran." },
+  { name: 'itineraire_options', description: "Modifie l'itinéraire en cours : éviter ou non autoroutes et péages, le plus rapide ou le plus court, ajouter ou retirer une ville de passage, choisir un des itinéraires possibles. Les options non précisées restent inchangées ; pour revenir au plus rapide sans restriction, mettre eviter_autoroute=false et eviter_peage=false.", parameters: { type: 'object', properties: { eviter_autoroute: { type: 'boolean' }, eviter_peage: { type: 'boolean' }, preference: { type: 'string', enum: ['rapide', 'court'] }, passer_par: { type: 'string' }, retirer_etape: { type: 'boolean' }, alternative: { type: 'integer', description: "Numéro de l'itinéraire possible à prendre (1 = premier)" } } } },
   { name: 'annuler_navigation', description: 'Arrête le guidage en cours.' },
   { name: 'musique', description: 'Contrôle la musique en cours (Spotify, YouTube Music… dans l\'appli).', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['play', 'pause', 'next', 'previous'] } }, required: ['action'] } },
   { name: 'mode_dna', description: 'Change le mode d\'affichage DNA : D = Dynamic (sport, rouge), N = Natural (normal), A = All-weather (pluie).', parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['D', 'N', 'A'] } }, required: ['mode'] } },
@@ -2229,7 +2313,23 @@ const AI_TOOLS = [
 ];
 const AI_IMPL = {
   etat_voiture: async () => carState(),
-  naviguer: async a => routeTo(a.destination, true),
+  naviguer: async a => routeTo(a.destination, true, a),
+  itineraire_details: async () => {
+    if (!nav.route) return { ok: false, raison: 'aucun itinéraire en cours' };
+    const cur = nav.alts[nav.altIdx];
+    holo('Itinéraires', `<p class="note">Vers ${esc(nav.dest.name)} · ${esc(describeOpts())}</p><div class="routes">${nav.alts.map((r, i) => `<div class="rt${i === nav.altIdx ? ' on' : ''}"><b>${i + 1}. ${esc(r.duree)} · ${esc(r.distance)}</b><span>Autoroute : ${esc(r.autoroute)} · Péage : ${esc(r.peage)}</span><span class="label">${esc(r.axes_principaux.join(' · '))}</span></div>`).join('')}</div><p class="note">Durées pour un trafic normal : le service gratuit ne connaît pas le trafic en temps réel.</p>`, { kicker: 'Navigation', ms: 40000 });
+    return { destination: nav.dest.name, options: describeOpts(), itineraire_actuel: Object.assign({ numero: nav.altIdx + 1 }, pubSummary(cur)),
+      itineraires_possibles: nav.alts.map((r, i) => Object.assign({ numero: i + 1, ecart_vs_actuel_min: Math.round((r.t - cur.t) / 60) }, pubSummary(r))),
+      trafic: 'non pris en compte' };
+  },
+  itineraire_options: async a => {
+    if (!nav.route) return { ok: false, raison: 'aucun itinéraire en cours' };
+    const before = nav.alts[nav.altIdx];
+    await applyRouteOpts(a);
+    const res = await computeRoute(false);
+    if (res.ok) { res.avant = pubSummary(before); res.difference_min = Math.round((nav.alts[nav.altIdx].t - before.t) / 60); res.difference_km = Math.round((nav.alts[nav.altIdx].d - before.d) / 1000); }
+    return res;
+  },
   annuler_navigation: async () => { clearRoute(); return { ok: true }; },
   musique: async a => { musicCmd(a.action); await new Promise(r => setTimeout(r, 900)); const v = musicView(); return { ok: true, titre: v.title, artiste: v.artist, en_lecture: v.playing }; },
   mode_dna: async a => { setDna(a.mode, true); modeTransition(a.mode); return { ok: true, mode: a.mode }; },
@@ -2263,7 +2363,7 @@ const AI_IMPL = {
 function aiContext() {
   const s = S(), n = navInfo(), d = new Date();
   const src = source === sim ? 'simulation' : source instanceof ObdSource ? (source.connected ? 'OBD connecté' : 'OBD déconnecté') : 'OBD non connecté';
-  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label} · galerie ${$('gallery').hidden ? 'fermée' : `ouverte : ${gal.items.length} photos « ${gal.title} », ${gal.mode === 'grid' ? 'grille' : 'photo ' + (gal.i + 1)}, zoom ${gal.z}`}]`;
+  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label + ' (' + describeOpts() + ')'} · galerie ${$('gallery').hidden ? 'fermée' : `ouverte : ${gal.items.length} photos « ${gal.title} », ${gal.mode === 'grid' ? 'grille' : 'photo ' + (gal.i + 1)}, zoom ${gal.z}`}]`;
 }
 async function askAI(q) {
   const contents = [...AI.hist, { role: 'user', parts: [{ text: `${aiContext()}\n${q}` }] }];
