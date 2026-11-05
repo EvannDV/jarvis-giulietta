@@ -305,6 +305,10 @@ button{cursor:pointer}
 .set .chk input{width:20px;height:20px;accent-color:var(--acc)}
 .set select.in{height:36px}
 .set .row{display:flex;gap:8px;flex-wrap:wrap}
+.quota{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.quota > div{border:1px solid var(--line);padding:6px 8px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
+.quota b{font-family:var(--f-display);font-size:17px;color:var(--st);font-variant-numeric:tabular-nums}
+.quota p{grid-column:1 / -1}
 .wx{display:flex;gap:14px;align-items:center;border:1px solid var(--line);padding:10px 12px}
 .wx > b{font-family:var(--f-display);font-size:46px;font-weight:600;line-height:1;color:var(--acc)}
 .wx div{display:flex;flex-direction:column;gap:3px;min-width:0}
@@ -2002,7 +2006,8 @@ function answer(q) {
   }
   if (/merci/.test(t)) return pick(['À votre service.', 'Toujours un plaisir, monsieur.']);
   if (/bonjour|salut|jarvis|hello|bonsoir/.test(t)) return `${greeting()}. Que puis-je faire pour vous ?`;
-  return "Je ne sais pas encore répondre à ça. Une fois relié à Claude, je pourrai répondre à n'importe quelle question.";
+  return AI.cfg.key ? "Sans mon cerveau en ligne, je ne sais pas répondre à cette question. Je réessaierai dès que possible, monsieur."
+    : "Je ne sais pas répondre à ça sans mon cerveau en ligne. Ajoutez votre clé Gemini dans les réglages, l'engrenage en haut à droite.";
 }
 /* ============================================================
    CERVEAU : Gemini (Google) + outils + météo + actualités + briefing
@@ -2016,8 +2021,23 @@ const AI = {
 // anciens alias « latest » trop souvent surchargés : on les remplace
 AI.cfg.model = { 'gemini-flash-lite-latest': 'gemini-3.1-flash-lite', 'gemini-flash-latest': 'gemini-3.5-flash' }[AI.cfg.model] || AI.cfg.model;
 const GEMINI_URL = m => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
-// modèle choisi d'abord, puis secours si Google est surchargé (testés : Flash-Lite 3.1 ≈ 1 s, Flash 3.5 ≈ 3 s)
-const AI_MODELS = () => [...new Set([AI.cfg.model, 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'])];
+// Modèle choisi d'abord, puis secours uniquement sur les Flash-Lite (500 requêtes/jour chacun en gratuit).
+// Flash 3.5 n'a que 20 requêtes/jour : jamais utilisé en secours.
+const AI_MODELS = () => [...new Set([AI.cfg.model, 'gemini-3.1-flash-lite', 'gemini-3.5-flash-lite'])];
+
+/* ---------- Quota du plan gratuit (compté sur l'appareil) ----------
+   Remise à zéro à minuit heure du Pacifique (9 h en France l'hiver, 9 h l'été aussi à une heure près). */
+const QUOTA = { 'gemini-3.1-flash-lite': 500, 'gemini-3.5-flash-lite': 500, 'gemini-3.5-flash': 20 };
+const ptDay = () => new Date().toLocaleDateString('en-CA', { timeZone: 'America/Los_Angeles' });
+function aiUsage() { const u = store.get('aiUsage', null); return u && u.day === ptDay() ? u : { day: ptDay(), n: {}, blocked: {} }; }
+function aiCount(m) { const u = aiUsage(); u.n[m] = (u.n[m] || 0) + 1; store.set('aiUsage', u); }
+function aiBlock(m) { const u = aiUsage(); u.blocked[m] = true; store.set('aiUsage', u); }
+function aiAvailable(m) { const u = aiUsage(); return !u.blocked[m] && (u.n[m] || 0) < (QUOTA[m] || 20); }
+function aiResetTime() { // prochaine remise à zéro, en heure locale
+  const now = new Date(), pt = new Date(now.toLocaleString('en-US', { timeZone: 'America/Los_Angeles' }));
+  const next = new Date(now.getTime() + ((24 - pt.getHours()) * 3600 - pt.getMinutes() * 60 - pt.getSeconds()) * 1000);
+  return next.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+}
 const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Tu parles au conducteur : tu le vouvoies et l'appelles parfois « monsieur », avec le flegme britannique et la pointe d'humour du Jarvis d'Iron Man.
 Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases courtes, sans liste, sans markdown, sans émoji.
 Pour toute action (itinéraire, musique, mode DNA, page, luminosité, diagnostic, météo, actualités), appelle l'outil correspondant au lieu d'annoncer que tu vas le faire.
@@ -2027,14 +2047,22 @@ N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, e
 
 async function gemini(body, models = AI_MODELS()) {
   let lastErr = null;
-  for (const m of models) {
+  const usable = models.filter(aiAvailable);
+  if (!usable.length) { const e = new Error('quota gratuit du jour atteint'); e.quota = 'day'; throw e; }
+  for (const m of usable) {
     const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), /lite/.test(m) ? 9000 : 15000);
     try {
+      aiCount(m);
       const r = await fetch(GEMINI_URL(m), { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI.cfg.key }, body: JSON.stringify(body) });
       const j = await r.json().catch(() => ({}));
       clearTimeout(to);
       if (r.ok) return j;
       lastErr = new Error((j.error && j.error.message) || 'HTTP ' + r.status); lastErr.status = r.status;
+      if (r.status === 429) { // limite atteinte : par jour (on bloque ce modèle jusqu'à demain) ou par minute
+        const daily = /per.?day|PerDay|daily/i.test(JSON.stringify(j.error || {}));
+        if (daily) aiBlock(m);
+        lastErr.quota = daily ? 'day' : 'minute';
+      }
       if (![429, 500, 503, 504].includes(r.status)) throw lastErr; // clé invalide, requête refusée : inutile d'essayer un autre modèle
     } catch (e) {
       clearTimeout(to);
@@ -2138,8 +2166,7 @@ const AI_TOOLS = [
   { name: 'diagnostic', description: 'Lit les codes défaut du calculateur et les affiche.' },
   { name: 'trajet_et_records', description: 'Trajet en cours (distance, conso, coût, score éco), derniers trajets et records 0-100 / 80-120.' },
   { name: 'meteo', description: 'Météo actuelle et prévisions (pluie dans les prochaines heures, demain). Sans lieu : position actuelle.', parameters: { type: 'object', properties: { lieu: { type: 'string', description: 'Ville, facultatif' } } } },
-  { name: 'actualites', description: 'Titres de l\'actualité du jour (Le Monde), affichés avec leurs images.', parameters: { type: 'object', properties: { rubrique: { type: 'string', enum: Object.keys(NEWS_FEEDS) } } } },
-  { name: 'recherche_web', description: 'Recherche Google pour une question factuelle récente qui n\'est couverte par aucun autre outil.', parameters: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }
+  { name: 'actualites', description: 'Titres de l\'actualité du jour (Le Monde), affichés avec leurs images.', parameters: { type: 'object', properties: { rubrique: { type: 'string', enum: Object.keys(NEWS_FEEDS) } } } }
 ];
 const AI_IMPL = {
   etat_voiture: async () => carState(),
@@ -2170,15 +2197,6 @@ const AI_IMPL = {
     if (!list.length) return { ok: false, raison: 'aucun article' };
     holo('Actualités', newsHtml(list), { kicker: 'Le Monde · ' + (a.rubrique || 'à la une'), ms: 45000 });
     return { articles: list.map(n => ({ titre: n.titre, resume: n.resume })) };
-  },
-  recherche_web: async a => {
-    try {
-      const j = await gemini({ contents: [{ role: 'user', parts: [{ text: a.question + "\nRéponds en français, en 3 phrases maximum." }] }], tools: [{ google_search: {} }] });
-      const parts = (j.candidates && j.candidates[0].content && j.candidates[0].content.parts) || [];
-      return { reponse: parts.map(p => p.text || '').join(' ').trim() };
-    } catch (e) {
-      return { ok: false, raison: e.status === 429 ? "la recherche Google n'est pas incluse dans l'offre gratuite de la clé Gemini" : e.message };
-    }
   }
 };
 
@@ -2189,7 +2207,7 @@ function aiContext() {
 }
 async function askAI(q) {
   const contents = [...AI.hist, { role: 'user', parts: [{ text: `${aiContext()}\n${q}` }] }];
-  for (let round = 0; round < 5; round++) {
+  for (let round = 0; round < 3; round++) { // 3 requêtes maximum par question
     const j = await gemini({ systemInstruction: { parts: [{ text: JARVIS_SYSTEM }] }, contents, tools: [{ functionDeclarations: AI_TOOLS }], generationConfig: { maxOutputTokens: 700, temperature: 0.7 } });
     const cand = j.candidates && j.candidates[0], content = cand && cand.content;
     if (!content || !content.parts) throw new Error(cand && cand.finishReason ? 'réponse bloquée (' + cand.finishReason + ')' : 'réponse vide');
@@ -2220,13 +2238,18 @@ function openSettings(msg) {
   holo('Réglages', `<div class="set">
     <label>Clé API Gemini<input class="in" id="sKey" type="password" autocomplete="off" spellcheck="false" placeholder="Collez votre clé ici"></label>
     <label>Cerveau<select class="in" id="sModel">
-      <option value="gemini-3.1-flash-lite">Rapide · Gemini 3.1 Flash-Lite (≈ 1 s)</option>
-      <option value="gemini-3.5-flash">Plus intelligent · Gemini 3.5 Flash (≈ 3 s)</option></select></label>
+      <option value="gemini-3.1-flash-lite">Rapide · Gemini 3.1 Flash-Lite (≈ 1 s, 500 requêtes/jour)</option>
+      <option value="gemini-3.5-flash">Plus intelligent · Gemini 3.5 Flash (≈ 3 s, 20 requêtes/jour)</option></select></label>
+    <div class="quota" id="sQuota"></div>
     <label class="chk"><input type="checkbox" id="sBrief"> Briefing au démarrage</label>
     <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis</label>
     <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
     <p class="note" id="sMsg">${esc(msg || '')}</p>
-    <p class="note">La clé reste sur cet appareil et n'est envoyée qu'à Google. Sans clé, Jarvis répond avec ses réponses intégrées.</p></div>`, { kicker: 'Jarvis', ms: 0 });
+    <p class="note">La clé reste sur cet appareil et n'est envoyée qu'à Google. Une question coûte 1 à 3 requêtes ; les commandes simples (mode sport, musique suivante, pages, nuit) et les boutons État, Diag, Entretien, Actus n'en coûtent aucune. Sans clé ou quota épuisé, Jarvis garde ses réponses intégrées.</p></div>`, { kicker: 'Jarvis', ms: 0 });
+  const u = aiUsage();
+  $('sQuota').innerHTML = Object.keys(QUOTA).map(m => { const n = u.n[m] || 0, max = QUOTA[m], st = u.blocked[m] || n >= max ? 'crit' : n > max * 0.8 ? 'warn' : 'ok';
+    return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
+    + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
   const save = () => {
     AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked };
@@ -2290,16 +2313,29 @@ async function runBriefing(force) {
   if (!AI.cfg.key && !AI.keyHintSaid) { AI.keyHintSaid = true; setTimeout(() => say("Pour me donner un vrai cerveau, collez votre clé Gemini dans les réglages : l'engrenage en haut à droite."), 2500); }
 }
 
+// Commandes simples et boutons rapides : exécutés sans IA (instantané, zéro requête du quota)
+function isQuickCommand(q) {
+  const t = norm(q).replace(/[!?.,]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^jarvis /, '').replace(/ (stp|s il te plait|s il vous plait)$/, '');
+  return /^(etat moteur|diagnostic|entretien|actualites)$/.test(t)
+    || /^(passe |mets |active |bascule )?(en |le )?mode (sport|dynamic|d|pluie|all ?weather|a|normal|natural|n|nuit|jour)$/.test(t)
+    || /^(mode )?(nuit|jour)$/.test(t)
+    || /^(mets |joue |lance |coupe )?(la )?(musique|chanson|titre)( suivante| suivant| precedente| precedent)?$/.test(t)
+    || /^(pause|play|lecture|suivant|suivante|precedent|precedente|chanson suivante|musique suivante)$/.test(t)
+    || /^(montre|affiche|ouvre|va sur)( moi)?( la| le| les)?( page)? (conduite|compteur|carte|gps|nav|navigation|musique|lecteur|moteur|hologramme|perf|chrono|garage|entretien)$/.test(t)
+    || /^(annule|arrete|stop)( la| le| l)? ?(navigation|itineraire|guidage)$/.test(t);
+}
 function ask(q) {
   q = q.trim(); if (!q) return; addMsg(q, true);
-  if (!AI.cfg.key) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 350); return; }
+  if (!AI.cfg.key || isQuickCommand(q)) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 250); return; }
   // questions posées à la suite : traitées dans l'ordre
   AI.chain = AI.chain.then(() => {
     core.classList.add('think');
     return askAI(q).then(t => { say(t); AI.offlineSaid = false; }).catch(e => {
       console.warn('Gemini :', e);
       const a = answer(q);
-      if (!AI.offlineSaid) { AI.offlineSaid = true; say('Mon cerveau en ligne ne répond pas (' + (e.message || 'erreur') + '). Je passe en réponses simplifiées.'); }
+      if (e.quota === 'day') { if (AI.quotaSaid !== ptDay()) { AI.quotaSaid = ptDay(); say(`Quota gratuit Gemini du jour atteint, monsieur. Je passe en réponses intégrées jusqu'à ${aiResetTime()}.`); } }
+      else if (e.quota === 'minute') say("Trop de questions d'un coup pour l'offre gratuite. Laissez-moi quelques secondes, monsieur.");
+      else if (!AI.offlineSaid) { AI.offlineSaid = true; say('Mon cerveau en ligne ne répond pas (' + (e.message || 'erreur') + '). Je passe en réponses simplifiées.'); }
       if (a) say(a);
     }).finally(() => core.classList.remove('think'));
   });
