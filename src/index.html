@@ -161,7 +161,7 @@ button{cursor:pointer}
 .ring{fill:none;stroke:var(--acc-dim);stroke-width:1;stroke-dasharray:2 10;opacity:.6;transform-box:view-box;transform-origin:200px 200px;animation:spin 40s linear infinite}
 .ring.rev{stroke-dasharray:30 6 4 6;animation-duration:26s;animation-direction:reverse;opacity:.35}
 :root[data-dna="D"] .ring{animation-duration:14s}
-.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;border-top:1px solid var(--line);padding-top:8px}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid var(--line);padding-top:8px}
 .stat{display:flex;flex-direction:column;gap:2px;min-width:0}
 .stat b{font-family:var(--f-display);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
 .stat b small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
@@ -201,7 +201,7 @@ button{cursor:pointer}
 :root[data-dna="A"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.75) contrast(1.15) sepia(1) hue-rotate(178deg) saturate(1.9)}
 .route-line{filter:drop-shadow(0 0 6px var(--acc))}
 .car-ico{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);color:var(--text);filter:drop-shadow(0 0 10px var(--acc));pointer-events:none}
-.attrib{position:absolute;right:12px;bottom:58px;font-family:var(--f-mono);font-size:9px;color:var(--muted);background:rgba(var(--bg-rgb),.6);padding:1px 4px}
+.attrib{position:absolute;left:12px;bottom:58px;font-family:var(--f-mono);font-size:9px;color:var(--muted);background:rgba(var(--bg-rgb),.6);padding:1px 4px}
 .map-msg{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:min(86%,340px);text-align:center;color:var(--text);font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:rgba(var(--bg-rgb),.85);border:1px solid var(--line-hi);padding:10px 12px;cursor:pointer}
 .map-msg small{display:block;margin-top:6px;color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:13px}
 .turn{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(var(--bg-rgb),.82);border:1px solid var(--line-hi)}
@@ -328,6 +328,25 @@ button{cursor:pointer}
 .rt.on{border-color:var(--acc);box-shadow:inset 3px 0 0 var(--acc)}
 .rt b{font-family:var(--f-display);font-size:18px}
 .holo .wimg{width:100%;max-height:34vh;object-fit:cover;border:1px solid var(--line)}
+#fuelStat[data-state="warn"] b,#fuelStat[data-state="crit"] b{color:var(--st)}
+.limit{position:absolute;top:14px;right:14px;width:62px;height:62px;border-radius:50%;background:#fff;border:7px solid #d0202e;display:grid;place-items:center;z-index:2;box-shadow:0 0 16px rgba(0,0,0,.5)}
+.limit b{font-family:var(--f-display);font-weight:700;font-size:24px;color:#111;letter-spacing:-.02em}
+.limit.lmap{top:auto;bottom:62px;right:14px;width:68px;height:68px}
+.limit.over{animation:limitPulse .6s ease-in-out infinite alternate;box-shadow:0 0 0 6px rgba(255,40,60,.35),0 0 28px #ff2838}
+.limit.rain::after{content:"pluie";position:absolute;bottom:-20px;font-family:var(--f-mono);font-size:10px;letter-spacing:.1em;color:var(--ice);text-transform:uppercase}
+@keyframes limitPulse{from{transform:scale(1)}to{transform:scale(1.12)}}
+.mic{flex:none;width:42px;border:1px solid var(--line-hi);background:none;color:var(--acc);display:grid;place-items:center;position:relative}
+.mic:hover{border-color:var(--acc)}
+.mic[data-state="listening"]{background:var(--acc);color:var(--bg);box-shadow:0 0 0 0 rgba(var(--acc-rgb),.6);animation:micPulse 1s ease-out infinite}
+.mic.wake::after{content:"";position:absolute;top:4px;right:4px;width:7px;height:7px;border-radius:50%;background:var(--ok);box-shadow:0 0 6px var(--ok)}
+@keyframes micPulse{to{box-shadow:0 0 0 12px rgba(var(--acc-rgb),0)}}
+.core.listen i:nth-child(3){animation:pulse .25s ease-in-out infinite alternate;background:var(--ok);box-shadow:0 0 20px var(--ok)}
+.core{cursor:pointer}
+.poi-pin{display:grid;place-items:center}
+.poi-pin span{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;background:var(--amber);color:#111;font:700 13px/1 var(--f-display);box-shadow:0 0 10px var(--amber)}
+.pois{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.pois li{border:1px solid var(--line);padding:7px 10px;display:flex;flex-direction:column;gap:2px}
+.pois span{color:var(--muted);font-size:13px}
 .quota{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
 .quota > div{border:1px solid var(--line);padding:6px 8px;display:flex;flex-direction:column;gap:3px;font-size:12px;color:var(--muted)}
 .quota b{font-family:var(--f-display);font-size:17px;color:var(--st);font-variant-numeric:tabular-nums}
@@ -546,8 +565,10 @@ button{cursor:pointer}
         <div class="stats">
           <div class="stat"><span class="label">Conso inst.</span><b id="cons">--</b></div>
           <div class="stat"><span class="label">Trajet</span><b><span id="trip">0,0</span><small>km</small></b></div>
-          <div class="stat"><span class="label" id="stat3l">Charge moteur</span><b id="stat3">--</b></div>
+          <div class="stat"><span class="label" id="stat3l">Charge</span><b id="stat3">--</b></div>
+          <div class="stat" id="fuelStat"><span class="label">Autonomie</span><b id="range">--</b></div>
         </div>
+        <div class="limit" hidden title="Limitation de vitesse"><b></b></div>
       </div>
 
       <div class="engine">
@@ -577,6 +598,7 @@ button{cursor:pointer}
           <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path id="turnIco" d="M14 36V18h14M22 11l7 7-7 7"/></svg>
           <div><b id="turnDist">-- m</b><span id="turnStreet">--</span></div>
         </div>
+        <div class="limit lmap" hidden title="Limitation de vitesse"><b></b></div>
         <div class="eta"><span class="label" id="etaLbl">Itinéraire démo</span><span><b id="eta">--:--</b> <span class="label" id="remain">-- km</span></span></div>
       </div>
     </section>
@@ -704,7 +726,7 @@ button{cursor:pointer}
       </div>
     </div>
     <div class="controls">
-      <form id="ask"><input id="q" placeholder="Demandez à Jarvis…" autocomplete="off" aria-label="Question pour Jarvis"><button class="btn primary" type="submit">Envoyer</button></form>
+      <form id="ask"><button class="mic" id="micBtn" type="button" aria-label="Parler à Jarvis" title="Parler à Jarvis"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button><input id="q" placeholder="Demandez à Jarvis…" autocomplete="off" aria-label="Question pour Jarvis"><button class="btn primary" type="submit">Envoyer</button></form>
       <div class="quick">
         <button class="btn" type="button" data-q="état moteur">État</button>
         <button class="btn" type="button" data-q="diagnostic">Diag</button>
@@ -767,7 +789,7 @@ const PROFILE = [[0,5],[45,22],[25,8],[60,20],[0,7],[70,18],[110,25],[132,40],[9
 const K = [0, 118, 64, 41, 30.5, 24, 19.6]; // tr/min par km/h, boîte 6
 class SimSource {
   constructor() {
-    this.s = { speed:0, rpm:830, gear:0, boost:0.02, coolant:34, oil:27, batt:14.1, soot:78.6, regen:false, regens:0, load:0, lph:0.6, ext:11, accel:0 };
+    this.s = { speed:0, rpm:830, gear:0, boost:0.02, coolant:34, oil:27, batt:14.1, soot:78.6, regen:false, regens:0, load:0, lph:0.6, ext:11, accel:0, fuel:21 };
     this.pi = 0; this.pt = 0; this.shiftT = 0; this.demo = 6; this.launch = null;
   }
   startLaunch() { this.launch = { phase: 'stop', t: 0 }; }
@@ -825,6 +847,7 @@ class SimSource {
     else { s.soot -= dt * D * 0.03; if (s.soot <= 32) s.regen = false; }
 
     s.lph = (a < -1 && s.gear > 0) ? 0 : 0.55 + s.load * s.rpm / 1000 * 3.2 + (s.regen ? 0.6 : 0);
+    s.fuel = Math.max(0, s.fuel - s.lph * dt / 3600 * D * 4 / 60 * 100); // réservoir 60 L, consommation accélérée pour la démo
     return s;
   }
 }
@@ -935,7 +958,7 @@ class ObdSource {
   lostLink() {
     if (!this.connected) return;
     this.connected = false; this.lost = true; this.raw = {}; this.tS = 0; this.accRaw = 0;
-    Object.assign(this.s, { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, load: null, lph: null, ext: null, accel: 0 });
+    Object.assign(this.s, { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, load: null, lph: null, ext: null, accel: 0, fuel: null });
     if (this.onLost) this.onLost();
     this.retry();
   }
@@ -974,7 +997,7 @@ class ObdSource {
     if (pid === '0D') { const now = performance.now(); if (this.tS) this.accRaw = (b[0] - this.vS) / Math.max(0.05, (now - this.tS) / 1000); this.vS = b[0]; this.tS = now; }
   }
   async loop() {
-    const FAST = ['0C', '0D', '0B', '04'], SLOW = ['05', '5C', '42', 'RV', '46', '33', '5E'];
+    const FAST = ['0C', '0D', '0B', '04'], SLOW = ['05', '5C', '42', 'RV', '46', '33', '5E', '2F'];
     while (this.connected) { for (const p of FAST) await this.read(p); await this.read(SLOW[this.slowI++ % SLOW.length]); }
   }
   step(dt) {
@@ -991,6 +1014,7 @@ class ObdSource {
     s.oil = r['5C'] ? A('5C') - 40 : null;
     s.batt = r['42'] ? (A('42') * 256 + A('42', 1)) / 1000 : r.RV != null ? r.RV : null;
     s.ext = r['46'] ? A('46') - 40 : null;
+    s.fuel = r['2F'] ? A('2F') * 100 / 255 : null; // niveau de carburant, si la voiture le transmet
     s.lph = r['5E'] ? (A('5E') * 256 + A('5E', 1)) / 20 : s.rpm > 300 ? 0.55 + s.load * s.rpm / 1000 * 3.2 : 0;
     if (s.speed < 3) s.gear = 0;
     else { let best = 1; for (let g = 1; g < K.length; g++) if (Math.abs(s.rpm / s.speed - K[g]) < Math.abs(s.rpm / s.speed - K[best])) best = g; s.gear = best; }
@@ -998,7 +1022,7 @@ class ObdSource {
   }
 }
 class NoneSource {
-  constructor() { this.s = { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: null, lph: null, ext: null, accel: 0 }; }
+  constructor() { this.s = { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: null, lph: null, ext: null, accel: 0, fuel: null }; }
   step() { return this.s; }
 }
 const HOSTED = !!window.JARVIS_HOSTED || NATIVE; // vrai sur la version installée (GitHub Pages ou appli Android), faux dans la prévisualisation
@@ -1063,7 +1087,7 @@ function setDna(m, quiet) {
   document.documentElement.dataset.dna = m;
   document.querySelectorAll('.dna button').forEach(b => b.setAttribute('aria-pressed', b.dataset.dna === m));
   $('modeTag').textContent = DNA_INFO[m].tag;
-  $('stat3l').textContent = m === 'D' ? 'Pic turbo' : m === 'A' ? 'Distance sécu.' : 'Charge moteur';
+  $('stat3l').textContent = m === 'D' ? 'Pic turbo' : m === 'A' ? 'Dist. sécu.' : 'Charge';
   refreshTokens();
   fx.setMode(m);
   if (!quiet) modeTransition(m);
@@ -1833,6 +1857,7 @@ function renderMaint() {
     $('maintList').innerHTML = `<div class="edit-grid">
       <label>Compteur (km)<input class="in" id="e_odo" type="number" inputmode="numeric" value="${odoNow()}"></label>
       <label>Prix du gazole (€/L)<input class="in" id="e_fuel" type="number" step="0.01" inputmode="decimal" value="${garage.fuel}"></label>
+      <label>Réservoir (litres)<input class="in" id="e_tank" type="number" inputmode="numeric" value="${garage.tank || 60}"></label><span></span>
       ${garage.items.map(it => it.type === 'km'
         ? `<label>${it.name} · fait à (km)<input class="in" id="e_${it.id}_last" type="number" inputmode="numeric" value="${it.last}"></label><label>${it.name} · tous les (km)<input class="in" id="e_${it.id}_every" type="number" inputmode="numeric" value="${it.every}"></label>`
         : `<label>${it.name} · échéance<input class="in" id="e_${it.id}_due" type="date" value="${it.due}"></label><span></span>`).join('')}
@@ -1849,6 +1874,7 @@ $('editBtn').addEventListener('click', () => {
     const num = id => { const v = parseFloat($(id).value); return isFinite(v) ? v : null; };
     const odo = num('e_odo'); if (odo !== null) { garage.odo = odo - trip.dist; }
     const fuel = num('e_fuel'); if (fuel !== null) garage.fuel = fuel;
+    const tank = num('e_tank'); if (tank) garage.tank = tank;
     garage.items.forEach(it => {
       if (it.type === 'km') { const l = num(`e_${it.id}_last`), e = num(`e_${it.id}_every`); if (l !== null) it.last = l; if (e) it.every = e; }
       else { const v = $(`e_${it.id}_due`).value; if (v) it.due = v; }
@@ -2017,6 +2043,8 @@ $('holoClose').addEventListener('click', closeHolo);
    ============================================================ */
 const logEl = $('log'), core = $('core');
 let voiceOn = !!store.get('voice', false);
+let speakUntil = 0; // réponses lues à voix haute pendant 20 s après une question posée à la voix
+const speech = { speaking: false, followUntil: 0 }; // followUntil : Jarvis vient de poser une question, on écoute la réponse sans « Jarvis »
 const stamp = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 function addMsg(text, me) {
   const m = document.createElement('div'); m.className = 'msg' + (me ? ' me' : '');
@@ -2034,17 +2062,29 @@ function addMsg(text, me) {
     if (k < text.length) setTimeout(tick, 18); else setTimeout(() => core.classList.remove('talk'), 400);
   };
   tick();
-  if (voiceOn) speak(text);
+  if (/\?\s*$/.test(text)) speech.followUntil = Date.now() + 12000;
+  if (voiceOn || Date.now() < speakUntil) speak(text);
 }
 const say = t => addMsg(t);
-function speak(text) {
-  try {
-    const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
-    if (tts) { tts.speak({ text, lang: 'fr-FR', rate: 1.05, pitch: 0.9, queueStrategy: 0 }).catch(() => {}); return; }
-    const u = new SpeechSynthesisUtterance(text); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9;
-    const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('fr')); if (v) u.voice = v;
-    speechSynthesis.cancel(); speechSynthesis.speak(u);
-  } catch (e) {}
+function speak(text) { speakAsync(text); }
+// Parle et se résout à la fin : pendant ce temps, l'écoute du micro est suspendue (Jarvis ne s'entend pas lui-même)
+function speakAsync(text) {
+  return new Promise(done => {
+    let ended = false; const finish = () => { if (ended) return; ended = true; speech.speaking = false; done(); };
+    try {
+      speech.speaking = true;
+      const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
+      if (tts) { tts.speak({ text, lang: 'fr-FR', rate: 1.05, pitch: 0.9, queueStrategy: 1 }).then(finish, finish); setTimeout(finish, 30000); return; }
+      const u = new SpeechSynthesisUtterance(text); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9;
+      const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('fr')); if (v) u.voice = v;
+      u.onend = finish; u.onerror = finish;
+      speechSynthesis.speak(u); setTimeout(finish, Math.min(30000, 1500 + text.length * 90));
+    } catch (e) { finish(); }
+  });
+}
+function stopSpeaking() {
+  try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (e) {}
+  speech.speaking = false;
 }
 function greeting() {
   const h = new Date().getHours();
@@ -2164,6 +2204,8 @@ Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n
 N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.
 Photos : pour montrer des photos, appelle chercher_images (actualite=true pour un événement récent ou en cours, false sinon, avec des mots_cles_anglais). Ensuite « zoome », « la 3 », « suivante », « affiche-les toutes », « ferme » passent par l'outil galerie ; « montre-en d'autres » ou « plus de photos » relance chercher_images avec un nombre plus grand. Pour dire ce qu'on voit sur une photo, appelle decrire_image.
 Navigation : pour savoir par où passe l'itinéraire (autoroute, péages, routes), appelle itineraire_details ; pour le modifier (éviter autoroutes ou péages, plus rapide, plus court, passer par une ville, prendre un autre itinéraire), appelle itineraire_options et annonce le temps gagné ou perdu. Les durées ne tiennent pas compte du trafic en temps réel : dis-le si on te parle de bouchons.
+Lieux : chercher_lieu seulement quand le conducteur demande un lieu (station, McDo, parking…). N'appelle aller_au_lieu que s'il demande explicitement d'y aller ou de l'ajouter comme étape ; sinon, propose-le simplement.
+Messages : ne lis ou ne prépare une réponse que si le conducteur le demande ; une réponse n'est envoyée qu'après sa confirmation orale (« oui »), relis-la-lui.
 Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.`;
 
 async function gemini(body, models = AI_MODELS()) {
@@ -2274,7 +2316,9 @@ function carState() {
     mode_dna: { D: 'Dynamic (sport)', N: 'Natural', A: 'All-weather (pluie)' }[dna], page_affichee: page,
     navigation: n.dist == null ? n.street : { prochaine_manoeuvre: n.street, dans: fmtDist(n.dist), destination: n.label, arrivee: n.eta, restant: fmtDist(n.remain) },
     musique: { titre: v.title, artiste: v.artist, en_lecture: v.playing },
-    trajet_en_cours: { distance_km: r1(trip.dist), duree_min: r0(trip.t / 60) }
+    trajet_en_cours: { distance_km: r1(trip.dist), duree_min: r0(trip.t / 60) },
+    carburant: (() => { const a = autonomy(); return a.km == null ? 'niveau non transmis' : { niveau_pct: r0(a.pct), litres: r0(a.litres), autonomie_km: a.km }; })(),
+    limitation_vitesse_kmh: SL.limit, sous_la_pluie: rainNow()
   };
 }
 const AI_TOOLS = [
@@ -2385,18 +2429,24 @@ function openSettings(msg) {
       <option value="gemini-3.5-flash">Plus intelligent · Gemini 3.5 Flash (≈ 3 s, 20 requêtes/jour)</option></select></label>
     <div class="quota" id="sQuota"></div>
     <label class="chk"><input type="checkbox" id="sBrief"> Briefing au démarrage</label>
-    <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis</label>
+    <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis (toujours)</label>
+    <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
+    <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
+    <label class="chk"><input type="checkbox" id="sMsg2"> Lire mes messages à voix haute (WhatsApp, SMS…)</label>
     <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
     <p class="note" id="sMsg">${esc(msg || '')}</p>
-    <p class="note">La clé reste sur cet appareil et n'est envoyée qu'à Google. Une question coûte 1 à 3 requêtes ; les commandes simples (mode sport, musique suivante, pages, nuit) et les boutons État, Diag, Entretien, Actus n'en coûtent aucune. Sans clé ou quota épuisé, Jarvis garde ses réponses intégrées.</p></div>`, { kicker: 'Jarvis', ms: 0 });
+    <p class="note">Le micro (bouton à gauche de la saisie, ou toucher le cercle de Jarvis) fonctionne sans réglage. L'écoute permanente consomme un peu plus de batterie. La clé reste sur cet appareil et n'est envoyée qu'à Google. Une question coûte 1 à 3 requêtes ; les commandes simples (mode sport, musique suivante, pages, nuit) et les boutons État, Diag, Entretien, Actus n'en coûtent aucune. Sans clé ou quota épuisé, Jarvis garde ses réponses intégrées.</p></div>`, { kicker: 'Jarvis', ms: 0 });
   const u = aiUsage();
   $('sQuota').innerHTML = Object.keys(QUOTA).map(m => { const n = u.n[m] || 0, max = QUOTA[m], st = u.blocked[m] || n >= max ? 'crit' : n > max * 0.8 ? 'warn' : 'ok';
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked };
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
+    if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
+    configureMessages();
   };
   $('sSave').addEventListener('click', () => { save(); $('sMsg').textContent = AI.cfg.key ? 'Enregistré. Jarvis utilise Gemini.' : 'Enregistré. Pas de clé : réponses intégrées.'; });
   $('sTest').addEventListener('click', async () => {
@@ -2650,10 +2700,327 @@ Object.assign(AI_IMPL, {
   }
 });
 
+/* ============================================================
+   VOIX : parler à Jarvis (bouton micro, ou écoute permanente « Jarvis… »)
+   ============================================================ */
+const VOICE = NATIVE ? window.Capacitor.Plugins.JarvisVoice : null;
+const WebSR = !NATIVE ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
+const mic = { busy: false, wake: false, errors: 0, waitCmd: false, rec: null };
+function micUi(state, text) {
+  const b = $('micBtn'); b.dataset.state = state || 'idle';
+  b.setAttribute('aria-label', state === 'listening' ? 'Écoute en cours' : 'Parler à Jarvis');
+  if (text != null) $('q').placeholder = text;
+  core.classList.toggle('listen', state === 'listening');
+}
+function listenOnce() { // une phrase → texte (ou '' si rien entendu)
+  return new Promise(async (done) => {
+    if (VOICE) {
+      const subs = []; let finished = false, partial = '';
+      const end = async (txt) => { if (finished) return; finished = true; for (const s of subs) { try { await s.remove(); } catch (e) {} } done(txt); };
+      subs.push(await VOICE.addListener('partial', r => { partial = r.text || ''; if (partial) $('q').placeholder = '« ' + partial + ' »'; }));
+      subs.push(await VOICE.addListener('result', r => end(r.text || partial)));
+      subs.push(await VOICE.addListener('error', r => end(r.code === 7 || r.code === 6 ? '' : partial)));
+      subs.push(await VOICE.addListener('state', r => { if (r.state === 'listening') micUi('listening'); }));
+      try { await VOICE.start({ offline: false }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
+      setTimeout(() => end(partial), 15000);
+    } else if (WebSR) {
+      const rec = new WebSR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 1;
+      let txt = '';
+      rec.onstart = () => micUi('listening');
+      rec.onresult = e => { txt = [...e.results].map(r => r[0].transcript).join(' '); $('q').placeholder = '« ' + txt + ' »'; };
+      rec.onerror = () => {}; rec.onend = () => done(txt);
+      mic.rec = rec;
+      try { rec.start(); } catch (e) { done(''); }
+    } else { say("La reconnaissance vocale n'est pas disponible ici. Elle fonctionne dans l'appli Android et dans Chrome."); done(''); }
+  });
+}
+async function pushToTalk() {
+  if (mic.busy) { try { VOICE ? VOICE.stop() : mic.rec && mic.rec.stop(); } catch (e) {} return; }
+  mic.busy = true; stopSpeaking(); micUi('listening', 'Je vous écoute…');
+  const txt = (await listenOnce()).trim();
+  mic.busy = false; micUi('idle', 'Demandez à Jarvis…');
+  if (txt) { speakUntil = Date.now() + 20000; ask(txt.replace(/^jarvis[,\s]*/i, '')); }
+}
+$('micBtn').addEventListener('click', pushToTalk);
+core.addEventListener('click', pushToTalk);
+// Écoute permanente : Jarvis réagit seulement aux phrases qui commencent par (ou contiennent) « Jarvis »
+async function wakeLoop() {
+  while (mic.wake && VOICE) {
+    if (mic.busy || speech.speaking || document.hidden) { await new Promise(r => setTimeout(r, 600)); continue; }
+    mic.busy = true; micUi('wake', mic.waitCmd ? 'Je vous écoute…' : 'Dites « Jarvis… »');
+    const txt = (await listenOnce()).trim();
+    mic.busy = false;
+    if (!mic.wake) break;
+    if (!txt) { mic.errors++; await new Promise(r => setTimeout(r, Math.min(3000, 250 * mic.errors))); continue; }
+    mic.errors = 0;
+    const m = txt.match(/\b(?:jarvis|jarvi|jervis|djarvis)\b[,\s]*(.*)$/i);
+    if (mic.waitCmd || Date.now() < speech.followUntil || pendingReply) { mic.waitCmd = false; speech.followUntil = 0; speakUntil = Date.now() + 20000; ask(m ? (m[1] || txt) : txt); continue; }
+    if (!m) continue; // conversation dans la voiture : on ignore
+    if (m[1] && m[1].length > 2) { speakUntil = Date.now() + 20000; ask(m[1]); }
+    else { mic.waitCmd = true; speakUntil = Date.now() + 20000; await speakAsync(pick(['Oui, monsieur ?', 'Je vous écoute.', 'À votre service.'])); speech.followUntil = Date.now() + 8000; }
+  }
+  micUi('idle', 'Demandez à Jarvis…');
+}
+function setWake(on) {
+  mic.wake = !!on && !!VOICE; AI.cfg.wake = mic.wake; store.set('ai', AI.cfg);
+  $('micBtn').classList.toggle('wake', mic.wake);
+  if (mic.wake) wakeLoop(); else { try { VOICE && VOICE.stop(); } catch (e) {} }
+}
+
+/* ============================================================
+   LIMITATION DE VITESSE (OpenStreetMap / Overpass, gratuit)
+   ============================================================ */
+const SL = { limit: null, raw: null, road: '', at: 0, pos: null, busy: false, overSince: 0, warned: null, announced: null };
+const OVERPASS = ['https://overpass-api.de/api/interpreter', 'https://overpass.kumi.systems/api/interpreter'];
+async function overpass(query) {
+  let err;
+  for (const u of OVERPASS) {
+    try {
+      const r = await fetch(u, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded' }, body: 'data=' + encodeURIComponent(query) });
+      if (r.ok) return await r.json();
+      err = new Error('HTTP ' + r.status);
+    } catch (e) { err = e; }
+  }
+  throw err || new Error('Overpass indisponible');
+}
+function parseMaxspeed(v) {
+  if (!v) return null;
+  v = String(v).toLowerCase().split(';')[0].trim();
+  const n = parseInt(v, 10); if (n > 0 && !/mph/.test(v)) return n;
+  return { 'fr:urban': 50, 'fr:rural': 80, 'fr:motorway': 130, 'fr:zone30': 30, 'fr:zone20': 20, 'fr:walk': 6, 'walk': 6, 'fr:trunk': 110 }[v] || (/zone:?30/.test(v) ? 30 : null);
+}
+const ROAD_RANK = { motorway: 9, trunk: 8, primary: 7, secondary: 6, tertiary: 5, motorway_link: 4, trunk_link: 4, primary_link: 4, unclassified: 3, residential: 2, living_street: 2, service: 1 };
+function rainNow() { return dna === 'A' || (wxNow && ((wxNow.code >= 51 && wxNow.code <= 67) || (wxNow.code >= 80 && wxNow.code <= 82) || wxNow.code >= 95)); }
+function rainLimit(l) { return !rainNow() || l == null ? l : l >= 130 ? 110 : l >= 110 ? 100 : l >= 90 ? 80 : l; }
+async function updateSpeedLimit() {
+  const g = nav.gps; if (!g || SL.busy) return;
+  const moved = !SL.pos || distM(SL.pos, g) > 150;
+  if (!moved && Date.now() - SL.at < 60000) return;
+  if (Date.now() - SL.at < 8000) return;
+  SL.busy = true; SL.at = Date.now(); SL.pos = { lat: g.lat, lon: g.lon };
+  try {
+    const j = await overpass(`[out:json][timeout:8];way(around:25,${g.lat.toFixed(6)},${g.lon.toFixed(6)})[highway~"^(motorway|trunk|primary|secondary|tertiary|unclassified|residential|living_street|motorway_link|trunk_link|primary_link|service)$"];out tags center 12;`);
+    let best = null;
+    (j.elements || []).forEach(w => {
+      const t = w.tags || {}; let lim = parseMaxspeed(t.maxspeed || t['maxspeed:forward'] || t['maxspeed:backward']);
+      if (lim == null && t.highway === 'motorway') lim = 130;
+      if (lim == null && t.highway === 'living_street') lim = 20;
+      const d = w.center ? distM(g, { lat: w.center.lat, lon: w.center.lon }) : 999;
+      const score = (lim != null ? 100 : 0) + (ROAD_RANK[t.highway] || 0) * 3 - d / 20;
+      if (!best || score > best.score) best = { lim, road: t.ref || t.name || '', score };
+    });
+    SL.raw = best ? best.lim : null; SL.road = best ? best.road : '';
+  } catch (e) { /* hors réseau : on garde la dernière valeur */ }
+  SL.busy = false;
+}
+function currentSpeed() { const s = S().speed; return s != null ? s : nav.gps && nav.gps.spd != null ? nav.gps.spd * 3.6 : null; }
+function renderSpeedLimit(now) {
+  const lim = rainLimit(SL.raw); SL.limit = lim;
+  const v = currentSpeed(), over = lim != null && v != null && v > lim + Math.max(5, lim * 0.05);
+  if (over) { if (!SL.overSince) SL.overSince = now; } else SL.overSince = 0;
+  const alert = SL.overSince && now - SL.overSince > 3000;
+  document.querySelectorAll('.limit').forEach(el => {
+    el.hidden = lim == null; el.querySelector('b').textContent = lim == null ? '' : lim;
+    el.classList.toggle('over', !!alert); el.classList.toggle('rain', rainNow() && SL.raw !== lim);
+  });
+  if (lim != null && SL.announced !== lim && AI.cfg.speedVoice !== false && HOSTED) { SL.announced = lim; }
+  if (alert && SL.warned !== lim && AI.cfg.speedVoice !== false) { SL.warned = lim; say(`Limitation à ${lim}, monsieur.`); }
+  if (!over && SL.warned === lim && v != null && v < lim - 5) SL.warned = null;
+}
+
+/* ============================================================
+   LIEUX SUR LE TRAJET / AUTOUR (OpenStreetMap) — seulement à la demande
+   ============================================================ */
+const POI_TYPES = {
+  station: '["amenity"="fuel"]', parking: '["amenity"="parking"]', restaurant: '["amenity"="restaurant"]', fast_food: '["amenity"="fast_food"]',
+  cafe: '["amenity"="cafe"]', boulangerie: '["shop"="bakery"]', supermarche: '["shop"="supermarket"]', borne_recharge: '["amenity"="charging_station"]',
+  toilettes: '["amenity"="toilets"]', aire_autoroute: '["highway"~"^(rest_area|services)$"]', garage: '["shop"~"^(car_repair|car)$"]',
+  pharmacie: '["amenity"="pharmacy"]', hotel: '["tourism"="hotel"]', distributeur: '["amenity"="atm"]', hopital: '["amenity"="hospital"]', lavage: '["amenity"="car_wash"]'
+};
+let poiList = [], poiLayer = null;
+function routeAhead(maxKm) { // points de l'itinéraire devant la voiture, tous les ~2 km
+  if (!nav.line || !nav.gps) return [];
+  let best = 0, bd = Infinity;
+  nav.line.forEach((p, i) => { const d = distM(nav.gps, { lat: p[0], lon: p[1] }); if (d < bd) { bd = d; best = i; } });
+  const out = [[nav.gps.lat, nav.gps.lon]]; let acc = 0, since = 0;
+  for (let i = best + 1; i < nav.line.length && acc < maxKm * 1000; i++) {
+    const d = distM({ lat: nav.line[i - 1][0], lon: nav.line[i - 1][1] }, { lat: nav.line[i][0], lon: nav.line[i][1] });
+    acc += d; since += d;
+    if (since > 2000) { out.push(nav.line[i]); since = 0; }
+  }
+  const last = nav.line[nav.line.length - 1]; if (acc < maxKm * 1000) out.push(last);
+  return out.slice(0, 120);
+}
+function kmAlong(pts, p) { // distance le long de la polyline jusqu'au point le plus proche de p
+  let acc = 0, best = { d: Infinity, km: 0 };
+  for (let i = 0; i < pts.length; i++) {
+    if (i) acc += distM({ lat: pts[i - 1][0], lon: pts[i - 1][1] }, { lat: pts[i][0], lon: pts[i][1] });
+    const d = distM({ lat: pts[i][0], lon: pts[i][1] }, p); if (d < best.d) best = { d, km: acc / 1000 };
+  }
+  return best;
+}
+async function searchPlaces(a) {
+  const filt = POI_TYPES[a.type] || POI_TYPES.station;
+  const nameF = a.nom ? `["name"~"${a.nom.replace(/["\\]/g, '').replace(/'/g, '.')}",i]` : '';
+  const where = a.ou || (nav.route ? 'sur_le_trajet' : 'autour');
+  let area, ref = nav.gps;
+  if (!nav.gps) return { ok: false, raison: 'position GPS inconnue' };
+  let pts = null;
+  if (where === 'sur_le_trajet' && nav.route) {
+    pts = routeAhead(Math.min(a.dans_les_km || 150, 400));
+    area = `around:${a.type === 'aire_autoroute' ? 600 : 900},${pts.map(p => p[0].toFixed(5) + ',' + p[1].toFixed(5)).join(',')}`;
+  } else if (where === 'pres_arrivee' && nav.dest) { ref = nav.dest; area = `around:${(a.rayon_km || 1.5) * 1000},${nav.dest.lat},${nav.dest.lon}`; }
+  else area = `around:${(a.rayon_km || 3) * 1000},${nav.gps.lat},${nav.gps.lon}`;
+  const j = await overpass(`[out:json][timeout:15];nwr(${area})${filt}${nameF};out center tags 60;`);
+  let list = (j.elements || []).map(e => {
+    const t = e.tags || {}, lat = e.lat != null ? e.lat : e.center && e.center.lat, lon = e.lon != null ? e.lon : e.center && e.center.lon;
+    if (lat == null) return null;
+    const p = { lat, lon }, along = pts ? kmAlong(pts, p) : null;
+    return { nom: t.name || t.brand || a.type.replace('_', ' '), marque: t.brand || '', adresse: [t['addr:housenumber'], t['addr:street'], t['addr:city']].filter(Boolean).join(' '),
+      horaires: t.opening_hours || '', lat, lon, km: along ? Math.round(along.km) : Math.round(distM(ref, p) / 100) / 10, detour_m: along ? Math.round(along.d) : null };
+  }).filter(Boolean);
+  list.sort((x, y) => x.km - y.km);
+  const seen = new Set(); list = list.filter(x => { const k = x.nom + Math.round(x.km); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
+  poiList = list.map((x, i) => Object.assign(x, { numero: i + 1 }));
+  if (nav.map && window.L) {
+    if (!poiLayer) poiLayer = L.layerGroup().addTo(nav.map);
+    poiLayer.clearLayers();
+    poiList.forEach(x => L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'poi-pin', html: `<span>${x.numero}</span>`, iconSize: [26, 26] }) }).addTo(poiLayer));
+  }
+  holo(list.length ? 'Lieux trouvés' : 'Aucun lieu trouvé', list.length
+    ? `<p class="note">${esc(a.nom || a.type.replace('_', ' '))} · ${where === 'sur_le_trajet' ? 'sur votre trajet' : where === 'pres_arrivee' ? "près de l'arrivée" : 'autour de vous'}</p><ol class="pois">${poiList.map(x => `<li><b>${x.numero}. ${esc(x.nom)}</b><span>${where === 'sur_le_trajet' ? 'dans ' + x.km + ' km' + (x.detour_m > 300 ? ' · à ' + x.detour_m + ' m de la route' : '') : 'à ' + fr(x.km, 1) + ' km'}${x.adresse ? ' · ' + esc(x.adresse) : ''}</span></li>`).join('')}</ol><p class="note">Dites « emmène-moi au 2 » ou « ajoute le 1 comme étape » pour y aller.</p>`
+    : `<p>Rien trouvé ${where === 'sur_le_trajet' ? 'sur les prochains kilomètres du trajet' : 'à proximité'}.</p>`, { kicker: 'OpenStreetMap', ms: 40000 });
+  return { ok: true, ou: where, lieux: poiList.map(x => ({ numero: x.numero, nom: x.nom, km: x.km, detour_m: x.detour_m, adresse: x.adresse, horaires: x.horaires })) };
+}
+async function goToPlace(a) {
+  const x = poiList[(a.numero || 1) - 1];
+  if (!x) return { ok: false, raison: "aucun lieu avec ce numéro : faites d'abord une recherche" };
+  const p = { lat: x.lat, lon: x.lon, name: x.nom };
+  if (a.comme === 'etape' && nav.route) { nav.opts.via = p; nav.opts.alt = null; return computeRoute(false); }
+  nav.dest = Object.assign({ adresse: x.adresse }, p); nav.opts = { exclude: nav.opts.exclude, prefer: nav.opts.prefer, via: null, alt: null };
+  return computeRoute(false);
+}
+
+/* ============================================================
+   MÉTÉO SUR LE TRAJET (Open-Meteo, un seul appel pour 4 points)
+   ============================================================ */
+async function routeWeather() {
+  if (!nav.route || !nav.line) return { ok: false, raison: 'aucun itinéraire en cours' };
+  const total = nav.route.distance, dur = nav.route.duration, pts = [];
+  let acc = 0; const targets = [0, 1 / 3, 2 / 3, 1].map(f => f * total); let ti = 0;
+  for (let i = 0; i < nav.line.length && ti < targets.length; i++) {
+    if (i) acc += distM({ lat: nav.line[i - 1][0], lon: nav.line[i - 1][1] }, { lat: nav.line[i][0], lon: nav.line[i][1] });
+    while (ti < targets.length && acc >= targets[ti] - 1) { pts.push({ lat: nav.line[i][0], lon: nav.line[i][1], km: Math.round(acc / 1000), t: Date.now() + dur * (targets[ti] / total) * 1000 }); ti++; }
+  }
+  while (pts.length < 4) { const l = nav.line[nav.line.length - 1]; pts.push({ lat: l[0], lon: l[1], km: Math.round(total / 1000), t: Date.now() + dur * 1000 }); }
+  const u = `https://api.open-meteo.com/v1/forecast?latitude=${pts.map(p => p.lat.toFixed(3)).join(',')}&longitude=${pts.map(p => p.lon.toFixed(3)).join(',')}&hourly=precipitation_probability,temperature_2m,weather_code&timezone=auto&forecast_days=2`;
+  let j = await fetch(u).then(r => r.json()); if (!Array.isArray(j)) j = [j];
+  const labels = ['Départ', 'Au tiers du trajet', 'Aux deux tiers', 'Arrivée · ' + (nav.dest ? nav.dest.name : '')];
+  const res = pts.map((p, k) => {
+    const h = j[k] && j[k].hourly; if (!h) return null;
+    const when = new Date(p.t), key = `${when.getFullYear()}-${String(when.getMonth() + 1).padStart(2, '0')}-${String(when.getDate()).padStart(2, '0')}T${String(when.getHours()).padStart(2, '0')}`;
+    let i = h.time.findIndex(t => t.slice(0, 13) === key); if (i < 0) i = 0;
+    return { lieu: labels[k], km: p.km, heure: when.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }), temperature: Math.round(h.temperature_2m[i]), ciel: WMO[h.weather_code[i]] || '', pluie_pct: h.precipitation_probability[i] };
+  }).filter(Boolean);
+  holo('Météo sur le trajet', `<div class="routes">${res.map(r => `<div class="rt" data-state="${r.pluie_pct >= 60 ? 'warn' : 'ok'}"><b>${esc(r.heure)} · ${r.temperature}° · ${esc(r.ciel)}</b><span>${esc(r.lieu)} · km ${r.km}</span><span class="label" style="color:var(--st)">pluie ${r.pluie_pct} %</span></div>`).join('')}</div><p class="note">Prévisions Open-Meteo à l'heure de passage estimée.</p>`, { kicker: 'Navigation', ms: 40000 });
+  return { points: res };
+}
+
+/* ============================================================
+   AUTONOMIE (niveau de carburant OBD, PID 2F)
+   ============================================================ */
+const fuelWarn = { k80: false, k40: false, trip: null };
+function autonomy() {
+  const s = S(), tank = garage.tank || 60;
+  if (s.fuel == null) return { pct: null, litres: null, km: null };
+  const cons = trip.dist > 5 && trip.fuel > 0 ? trip.fuel / trip.dist * 100 : (history.find(h => !h.ex) || {}).l100 || 5.5;
+  const litres = s.fuel / 100 * tank;
+  return { pct: s.fuel, litres, km: Math.max(0, Math.round(litres / Math.max(3, cons) * 100)), cons };
+}
+function fuelAlerts() {
+  const a = autonomy(); if (a.km == null) return;
+  if (a.km > 120) { fuelWarn.k80 = fuelWarn.k40 = false; }
+  if (a.km < 80 && !fuelWarn.k80) { fuelWarn.k80 = true; say(`Réserve : environ ${a.km} kilomètres d'autonomie, monsieur. Dites-moi si vous voulez une station sur la route.`); }
+  if (a.km < 40 && !fuelWarn.k40) { fuelWarn.k40 = true; say(`Plus que ${a.km} kilomètres d'autonomie. Il devient urgent de faire le plein.`); }
+  if (nav.route && nav.dest) {
+    const n = realNavInfo(), key = nav.dest.name;
+    if (n.remain != null && a.km < n.remain / 1000 * 1.05 && fuelWarn.trip !== key) { fuelWarn.trip = key; say(`Attention : environ ${a.km} kilomètres d'autonomie, il en reste ${Math.round(n.remain / 1000)} jusqu'à ${key}. Il faudra faire le plein en route.`); }
+  }
+}
+
+/* ============================================================
+   MESSAGES lus à voix haute (WhatsApp, SMS…) — option, désactivée par défaut
+   ============================================================ */
+const NOTIF = NATIVE ? window.Capacitor.Plugins.JarvisNotif : null;
+const MSG_APPS = ['com.whatsapp', 'com.whatsapp.w4b', 'com.google.android.apps.messaging', 'com.samsung.android.messaging', 'com.android.mms', 'com.facebook.orca', 'org.telegram.messenger', 'org.thoughtcrime.securesms', 'com.instagram.android', 'com.snapchat.android'];
+const inbox = []; let pendingReply = null;
+function configureMessages() {
+  if (!NOTIF) return;
+  NOTIF.configure({ enabled: !!AI.cfg.messages, apps: MSG_APPS }).then(r => { if (AI.cfg.messages && r && !r.granted) say("Pour lire vos messages, activez Jarvis dans « Accès aux notifications » : touchez le titre du lecteur de musique."); }).catch(() => {});
+}
+if (NOTIF) NOTIF.addListener('message', m => {
+  inbox.unshift(m); inbox.splice(10);
+  const txt = `Message ${m.app} de ${m.from || 'inconnu'} : ${m.text}`;
+  addMsg(txt); if (!voiceOn) speak(txt); // la lecture à voix haute est le but de l'option
+});
+function findMessage(from) {
+  if (!inbox.length) return null;
+  if (!from) return inbox[0];
+  const f = norm(from); return inbox.find(m => norm(m.from).includes(f)) || null;
+}
+function prepareReply(text, from) {
+  const m = findMessage(from);
+  if (!m) return { ok: false, raison: from ? `aucun message récent de ${from}` : 'aucun message récent' };
+  if (!m.canReply) return { ok: false, raison: `${m.app} ne permet pas de répondre depuis la notification` };
+  pendingReply = { m, text, at: Date.now() };
+  return { ok: true, a_confirmer: true, destinataire: m.from, application: m.app, texte: text, consigne: "Relis la réponse au conducteur et demande-lui de confirmer par « oui » ou « envoie »." };
+}
+async function sendPendingReply() {
+  const p = pendingReply; pendingReply = null;
+  if (!p || Date.now() - p.at > 120000) return 'Aucune réponse en attente.';
+  try { await NOTIF.reply({ key: p.m.key, text: p.text }); return `Réponse envoyée à ${p.m.from}.`; }
+  catch (e) { return 'Envoi impossible : ' + (e.message || e); }
+}
+// Réponse dictée sans IA : « réponds-lui : j'arrive dans 10 minutes », puis « oui »
+function messagesLocal(q) {
+  const t = norm(q).replace(/[!.]/g, '').trim();
+  if (pendingReply && /^(oui|envoie|envoyer|confirme|vas y|ok envoie|c est bon)\b/.test(t)) { sendPendingReply().then(say); return true; }
+  if (pendingReply && /^(non|annule|laisse tomber|stop)\b/.test(t)) { pendingReply = null; say('Réponse annulée.'); return true; }
+  const m = q.match(/^\s*(?:jarvis[,\s]*)?r[ée]pon(?:ds|dre|d)(?:[- ]lui| à ([^:,]+?))?\s*(?::|que|,)\s*(.+)$/i);
+  if (m && NOTIF) {
+    const r = prepareReply(m[2].trim(), m[1]);
+    say(r.ok ? `Je réponds à ${r.destinataire} : « ${r.texte} ». Je l'envoie ?` : 'Impossible : ' + r.raison + '.');
+    return true;
+  }
+  if (/^(lis|relis)( moi)? (mes |le |les )?(dernier )?(messages?|sms)$/.test(t) && NOTIF) {
+    if (!AI.cfg.messages) say("La lecture des messages est désactivée. Activez-la dans les réglages, l'engrenage en haut à droite.");
+    else if (!inbox.length) say('Aucun nouveau message.');
+    else inbox.slice(0, 3).reverse().forEach(x => say(`${x.app}, ${x.from} : ${x.text}`));
+    return true;
+  }
+  return false;
+}
+
+/* ---------- Outils supplémentaires pour Gemini ---------- */
+AI_TOOLS.push(
+  { name: 'chercher_lieu', description: "Cherche des lieux (station, parking, restaurant, McDo, boulangerie, aire d'autoroute, garage…) sur le trajet, autour ou près de l'arrivée, et les affiche numérotés. N'ajoute rien à l'itinéraire.", parameters: { type: 'object', properties: { type: { type: 'string', enum: Object.keys(POI_TYPES) }, nom: { type: 'string', description: "Enseigne ou nom (ex. McDonald's, Total, Alfa Romeo)" }, ou: { type: 'string', enum: ['sur_le_trajet', 'autour', 'pres_arrivee'] }, dans_les_km: { type: 'integer', description: 'Sur le trajet : distance maximale devant (km)' }, rayon_km: { type: 'number' } }, required: ['type'] } },
+  { name: 'aller_au_lieu', description: "Envoie vers un lieu trouvé par chercher_lieu, comme étape ou comme nouvelle destination. Seulement si le conducteur le demande explicitement.", parameters: { type: 'object', properties: { numero: { type: 'integer' }, comme: { type: 'string', enum: ['etape', 'destination'] } }, required: ['numero', 'comme'] } },
+  { name: 'meteo_trajet', description: "Météo prévue le long de l'itinéraire en cours, à l'heure de passage (départ, tiers, deux tiers, arrivée)." },
+  { name: 'messages_recus', description: 'Derniers messages reçus (WhatsApp, SMS…), seulement si la lecture des messages est activée.' },
+  { name: 'repondre_message', description: "Prépare une réponse au dernier message reçu (ou à un expéditeur). La réponse n'est envoyée qu'après confirmation orale du conducteur (« oui »).", parameters: { type: 'object', properties: { texte: { type: 'string' }, expediteur: { type: 'string' } }, required: ['texte'] } }
+);
+Object.assign(AI_IMPL, {
+  chercher_lieu: async a => searchPlaces(a),
+  aller_au_lieu: async a => goToPlace(a),
+  meteo_trajet: async () => routeWeather(),
+  messages_recus: async () => !NOTIF ? { ok: false, raison: "disponible seulement dans l'appli Android" } : !AI.cfg.messages ? { ok: false, raison: 'lecture des messages désactivée dans les réglages' } : { messages: inbox.slice(0, 5).map(m => ({ app: m.app, de: m.from, texte: m.text, peut_repondre: m.canReply })) },
+  repondre_message: async a => !NOTIF || !AI.cfg.messages ? { ok: false, raison: 'lecture des messages désactivée' } : prepareReply(a.texte, a.expediteur)
+});
+
 // Commandes simples et boutons rapides : exécutés sans IA (instantané, zéro requête du quota)
 function isQuickCommand(q) {
   const t = norm(q).replace(/[!?.,]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^jarvis /, '').replace(/ (stp|s il te plait|s il vous plait)$/, '');
-  return /^(etat moteur|diagnostic|entretien|actualites)$/.test(t)
+  return /^(etat moteur|diagnostic|entretien|actualites|mode demo|mode simulation)$/.test(t)
     || /^(ferme|fermer|cache|retire|enleve)( la| le| les| tout| ca)?( fenetre| galerie| photos?)?$/.test(t)
     || /^(passe |mets |active |bascule )?(en |le )?mode (sport|dynamic|d|pluie|all ?weather|a|normal|natural|n|nuit|jour)$/.test(t)
     || /^(mode )?(nuit|jour)$/.test(t)
@@ -2664,6 +3031,7 @@ function isQuickCommand(q) {
 }
 function ask(q) {
   q = q.trim(); if (!q) return; addMsg(q, true);
+  if (messagesLocal(q)) return;
   const g = galleryLocal(q); if (g) { setTimeout(() => say(g), 150); return; }
   if (!AI.cfg.key || isQuickCommand(q)) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 250); return; }
   // questions posées à la suite : traitées dans l'ordre
@@ -2804,7 +3172,14 @@ function frame(now) {
     alerts(s, now);
   }
   slowAcc += dt;
-  if (slowAcc >= 1) { slowAcc = 0; renderTrip(); }
+  if (slowAcc >= 1) {
+    slowAcc = 0; renderTrip();
+    if (HOSTED) updateSpeedLimit();
+    renderSpeedLimit(now); fuelAlerts();
+    const au = autonomy();
+    $('range').innerHTML = au.km == null ? 'NONE' : `${au.km}<small>km</small>`;
+    $('fuelStat').dataset.state = au.km == null ? 'na' : au.km < 40 ? 'crit' : au.km < 80 ? 'warn' : 'ok';
+  }
 
   if ((page === 'drive' || page === 'nav') && !nav.map) drawMap(dt, s.speed || 0);
   if (page === 'motor') { tHolo += dt; drawHolo($('holoCar'), tHolo, { zones: true, labels: true }); }
@@ -2823,6 +3198,7 @@ setInterval(applyNight, 60000);
 setDna(dna, true); applyNight();
 renderMaint(); renderHist(); renderBest(); renderTrip();
 setObdUi();
+setWake(!!AI.cfg.wake); configureMessages();
 if (HOSTED) {
   initRealMap();
   const wake = async () => { try { await navigator.wakeLock?.request('screen'); } catch (e) {} };
