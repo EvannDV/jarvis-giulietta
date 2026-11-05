@@ -235,6 +235,7 @@ button{cursor:pointer}
 .holo-panel .ptitle{position:absolute;top:12px;left:14px;right:14px}
 .sensors{padding:12px 14px;display:flex;flex-direction:column;gap:10px;overflow:auto}
 .srow{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:baseline;padding:5px 0;border-bottom:1px solid var(--line)}
+.srange{display:block;font-family:var(--f-mono);font-size:10px;letter-spacing:.06em;color:var(--muted);margin-top:1px}
 .srow b{font-family:var(--f-display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;text-align:right}
 .srow b small{font-size:12px;color:var(--muted);font-weight:400;margin-left:3px}
 .srow .state{min-width:74px;text-align:center}
@@ -994,7 +995,21 @@ class ObdSource {
     const r = this.buf.slice(0, i); this.buf = this.buf.slice(i + 1);
     const p = this.pending; this.pending = null; if (p) { clearTimeout(p.t); p.res(r); }
   }
-  cmd(c, timeout = 1200) {
+  cmd(c, timeout = 1200) { // une seule commande à la fois sur l'adaptateur
+    const run = () => this._cmd(c, timeout);
+    const p = (this.q || Promise.resolve()).then(run, run);
+    this.q = p.catch(() => {});
+    return p;
+  }
+  // Codes défaut : 0101 (voyant + nombre), 03 (mémorisés), 07 (en attente). Lecture seule, jamais d'effacement.
+  async readDtcs() {
+    const b = this.parse(await this.cmd('0101', 2500), '01');
+    return {
+      voyant_moteur: b ? !!(b[0] & 0x80) : null, nombre_annonce: b ? (b[0] & 0x7F) : null,
+      memorises: decodeDtcs(await this.cmd('03', 5000), '43'), en_attente: decodeDtcs(await this.cmd('07', 5000), '47')
+    };
+  }
+  _cmd(c, timeout) {
     return new Promise(res => {
       this.pending = { res, t: setTimeout(() => { this.pending = null; res(''); }, timeout) };
       Promise.resolve().then(() => this.link.write(c + '\r'))
@@ -1054,9 +1069,9 @@ const NA = ['na', 'none'];
 const st = {
   cool: v => v == null ? NA : v < 70 ? ['cold', 'froid'] : v > 105 ? ['crit', 'surchauffe'] : v > 100 ? ['warn', 'chaud'] : ['ok', 'normal'],
   oil: v => v == null ? NA : v < 80 ? ['cold', 'froid'] : v > 125 ? ['crit', 'trop chaud'] : ['ok', 'normal'],
-  batt: v => v == null ? NA : v < 12.4 ? ['warn', 'faible'] : ['ok', 'charge'],
+  batt: v => { if (v == null) return NA; const r = S().rpm; return r != null && r > 400 ? (v < 13.2 ? ['warn', 'charge faible'] : v > 15 ? ['warn', 'surtension'] : ['ok', 'charge']) : (v < 12.2 ? ['warn', 'faible'] : ['ok', 'correcte']); },
   dpf: (v, regen) => v == null ? NA : regen ? ['warn', 'régénération'] : v > 70 ? ['cold', 'chargé'] : ['ok', 'propre'],
-  boost: v => v == null ? NA : v > 1.35 ? ['warn', 'pleine charge'] : ['ok', 'normal']
+  boost: v => { if (v == null) return NA; const x = S(); if (v > 1.75) return ['crit', 'surpression']; if (x.load > 0.8 && x.rpm >= 2000 && x.rpm <= 3500 && v < 0.9) return ['warn', 'faible']; return v > 1.35 ? ['ok', 'pleine charge'] : ['ok', 'normal']; },
 };
 const STC = { na: () => T['--muted'], ok: () => T['--ok'], cold: () => T['--ice'], warn: () => T['--amber'], crit: () => T['--red'] };
 
@@ -1685,18 +1700,18 @@ function drawHolo(canvas, t, opts = {}) {
    CAPTEURS + DIAGNOSTIC (page Moteur)
    ============================================================ */
 const SENSORS = [
-  ['Régime', s => s.rpm == null ? 'NONE' : (Math.round(s.rpm / 10) * 10).toLocaleString('fr-FR'), 'tr/min', s => s.rpm == null ? NA : s.rpm > 4000 ? ['warn', 'haut'] : ['ok', 'normal']],
+  ['Régime', s => s.rpm == null ? 'NONE' : (Math.round(s.rpm / 10) * 10).toLocaleString('fr-FR'), 'tr/min', s => s.rpm == null ? NA : s.rpm > 4000 ? ['warn', 'haut'] : ['ok', 'normal'], 'ralenti 800–900'],
   ['Charge moteur', s => s.load == null ? 'NONE' : Math.round(s.load * 100), '%', () => null],
-  ['Pression turbo', s => fr(s.boost, 2), 'bar', s => st.boost(s.boost)],
-  ['Température eau', s => fr(s.coolant), '°C', s => st.cool(s.coolant)],
-  ['Température huile', s => fr(s.oil), '°C', s => st.oil(s.oil)],
-  ['Batterie', s => fr(s.batt, 1), 'V', s => st.batt(s.batt)],
-  ['Suie FAP', s => fr(s.soot), '%', s => st.dpf(s.soot, s.regen)],
+  ['Pression turbo', s => fr(s.boost, 2), 'bar', s => st.boost(s.boost), 'pleine charge 1,2–1,5'],
+  ['Température eau', s => fr(s.coolant), '°C', s => st.cool(s.coolant), 'normal 85–95'],
+  ['Température huile', s => fr(s.oil), '°C', s => st.oil(s.oil), 'chaude 80–115'],
+  ['Batterie', s => fr(s.batt, 1), 'V', s => st.batt(s.batt), '13,8–14,6 moteur tournant'],
+  ['Suie FAP', s => fr(s.soot), '%', s => st.dpf(s.soot, s.regen), 'régénération vers 80'],
   ['Régénérations', s => s.regens, 'session', () => null],
   ['Conso instantanée', s => fr(s.lph, 1), 'L/h', () => null],
   ['Température ext.', s => fr(s.ext), '°C', s => s.ext <= 3 ? ['warn', 'verglas'] : null]
 ];
-$('sensorList').innerHTML = SENSORS.map((r, i) => `<div class="srow" id="sr${i}"><span>${r[0]}</span><b><span>--</span><small>${r[2]}</small></b><span class="state" style="visibility:hidden">--</span></div>`).join('');
+$('sensorList').innerHTML = SENSORS.map((r, i) => `<div class="srow" id="sr${i}"><span>${r[0]}${r[4] ? `<small class="srange">${r[4]}</small>` : ''}</span><b><span>--</span><small>${r[2]}</small></b><span class="state" style="visibility:hidden">--</span></div>`).join('');
 function renderSensors() {
   const s = S();
   SENSORS.forEach((r, i) => {
@@ -1711,8 +1726,29 @@ const DTC_DEMO = [
   { code: 'P0401', st: 'warn', kind: 'mémorisé', title: 'Débit de recirculation des gaz (EGR) insuffisant', expl: "Souvent une vanne EGR encrassée, classique sur les diesels qui roulent beaucoup en ville. Pas urgent : un long trajet sur autoroute aide, sinon un nettoyage de la vanne." }
 ];
 let diagBusy = false;
+async function runRealDiag(quiet) {
+  diagBusy = true; $('diagBtn').disabled = true;
+  $('diagOut').innerHTML = '<p class="note">Lecture des codes défaut du calculateur moteur…</p>';
+  holo('Diagnostic', '<p>Lecture des codes défaut du calculateur moteur…</p>', { kicker: 'Diagnostic · OBD', ms: 0 });
+  try {
+    const r = await source.readDtcs();
+    const all = [...r.memorises.map(c => ({ code: c, type: 'mémorisé' })), ...r.en_attente.filter(c => !r.memorises.includes(c)).map(c => ({ code: c, type: 'en attente' }))];
+    const html = all.map(x => `<div class="dtc" data-state="${x.type === 'mémorisé' ? 'warn' : 'cold'}"><b>${x.code} · ${x.type}</b><span>${esc(dtcLabel(x.code))}</span></div>`).join('');
+    const head = `Voyant moteur ${r.voyant_moteur == null ? 'inconnu' : r.voyant_moteur ? 'allumé' : 'éteint'} · ${all.length ? all.length + ' code' + (all.length > 1 ? 's' : '') : 'aucun code défaut'}`;
+    $('diagOut').innerHTML = `<p class="note">${head}</p>${html}`;
+    holo('Diagnostic', `<p>${head}.</p>${html}<p class="note">Lecture seule : Jarvis n'efface jamais les codes. Dites « Jarvis, explique-moi ces codes » pour le détail.</p>`, { kicker: 'Diagnostic · OBD', ms: 40000 });
+    if (!quiet) say(all.length ? `${all.length} code${all.length > 1 ? 's' : ''} défaut : ${all.map(x => x.code).join(', ')}. ${dtcLabel(all[0].code)}.` : `Aucun code défaut, voyant moteur ${r.voyant_moteur ? 'pourtant allumé' : 'éteint'}. Tout est en ordre, monsieur.`);
+    return { simulation: false, voyant_moteur: r.voyant_moteur, codes: all.map(x => ({ code: x.code, type: x.type, description: dtcLabel(x.code) })) };
+  } catch (e) {
+    holo('Diagnostic', `<p>Lecture impossible : ${esc(e.message || e)}</p>`, { kicker: 'Diagnostic · OBD' });
+    return { ok: false, raison: 'lecture impossible' };
+  } finally { $('diagBtn').disabled = false; diagBusy = false; }
+}
 function runDiag(quiet) {
-  if (diagBusy) return Promise.resolve({ ok: false, raison: 'diagnostic déjà en cours' }); diagBusy = true;
+  if (diagBusy) return Promise.resolve({ ok: false, raison: 'diagnostic déjà en cours' });
+  if (source instanceof ObdSource && source.connected) return runRealDiag(quiet);
+  if (source !== sim) { const r = { ok: false, raison: "l'adaptateur OBD n'est pas connecté" }; if (!quiet) say("Je ne peux pas lire les codes défaut : l'adaptateur OBD n'est pas connecté."); return Promise.resolve(r); }
+  diagBusy = true;
   return new Promise(done => {
   $('diagBtn').disabled = true;
   $('diagOut').innerHTML = '<p class="note">Interrogation du calculateur moteur…</p>';
@@ -1720,7 +1756,7 @@ function runDiag(quiet) {
   setTimeout(() => {
     const html = DTC_DEMO.map(d => `<div class="dtc" data-state="${d.st}"><b>${d.code} · ${d.kind}</b><span><strong>${d.title}.</strong> ${d.expl}</span></div>`).join('');
     $('diagOut').innerHTML = `<p class="note">Aucun code actif. 1 code mémorisé (exemple simulé).</p>${html}`;
-    holo('Diagnostic terminé', `<p>Aucun défaut actif. Un code est mémorisé :</p>${html}<p class="note">Exemple simulé. Les vrais codes viendront de l'OBD à l'étape 2.</p>`, { kicker: 'Diagnostic · simulation' });
+    holo('Diagnostic terminé', `<p>Aucun défaut actif. Un code est mémorisé :</p>${html}<p class="note">Exemple simulé (mode démo). Avec l'OBD connecté, ce sont les vrais codes du calculateur.</p>`, { kicker: 'Diagnostic · simulation' });
     if (!quiet) say("Diagnostic terminé, monsieur. Aucun défaut actif. Un code mémorisé : P0401, la vanne EGR s'encrasse. Rien d'urgent, un trajet sur autoroute lui fera du bien.");
     $('diagBtn').disabled = false; diagBusy = false;
     done({ simulation: true, codes_actifs: [], codes_memorises: DTC_DEMO.map(d => ({ code: d.code, titre: d.title, explication: d.expl })) });
@@ -2221,6 +2257,7 @@ Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n
 N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.
 Photos : pour montrer des photos, appelle chercher_images (actualite=true pour un événement récent ou en cours, false sinon, avec des mots_cles_anglais). Ensuite « zoome », « la 3 », « suivante », « affiche-les toutes », « ferme » passent par l'outil galerie ; « montre-en d'autres » ou « plus de photos » relance chercher_images avec un nombre plus grand. Pour dire ce qu'on voit sur une photo, appelle decrire_image.
 Navigation : pour savoir par où passe l'itinéraire (autoroute, péages, routes), appelle itineraire_details ; pour le modifier (éviter autoroutes ou péages, plus rapide, plus court, passer par une ville, prendre un autre itinéraire), appelle itineraire_options et annonce le temps gagné ou perdu. Les durées ne tiennent pas compte du trafic en temps réel : dis-le si on te parle de bouchons.
+Mécanique : etat_voiture contient analyse_appli (verdicts calculés par l'appli) et valeurs_normales_2_0_jtdm : appuie-toi dessus, pas sur des valeurs génériques, et cite les chiffres utiles (valeur mesurée, pic, régime, plage normale) ; un moteur froid n'est pas « en pleine forme ». Pour l'évolution, les pics de turbo, le démarrage ou la montée en température, appelle historique_moteur. Pour les codes défaut, appelle diagnostic et explique chaque code ; ne conseille jamais de les effacer sans réparation. Pour « explique-moi » après une alerte, appuie-toi sur derniere_alerte.
 Lieux : chercher_lieu seulement quand le conducteur demande un lieu (station, McDo, parking…). N'appelle aller_au_lieu que s'il demande explicitement d'y aller ou de l'ajouter comme étape ; sinon, propose-le simplement.
 Messages : ne lis ou ne prépare une réponse que si le conducteur le demande ; une réponse n'est envoyée qu'après sa confirmation orale (« oui »), relis-la-lui.
 Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.`;
@@ -2335,7 +2372,9 @@ function carState() {
     musique: { titre: v.title, artiste: v.artist, en_lecture: v.playing },
     trajet_en_cours: { distance_km: r1(trip.dist), duree_min: r0(trip.t / 60) },
     carburant: (() => { const a = autonomy(); return a.km == null ? 'niveau non transmis' : { niveau_pct: r0(a.pct), litres: r0(a.litres), autonomie_km: a.km }; })(),
-    limitation_vitesse_kmh: SL.limit, sous_la_pluie: rainNow()
+    limitation_vitesse_kmh: SL.limit, sous_la_pluie: rainNow(),
+    analyse_appli: verdicts(), valeurs_normales_2_0_jtdm: REF,
+    derniere_alerte: meca.alerts[0] ? { quand: agoTxt(meca.alerts[0].t), alerte: meca.alerts[0].titre, detail: meca.alerts[0].texte } : null
   };
 }
 const AI_TOOLS = [
@@ -2407,7 +2446,7 @@ const AI_IMPL = {
 function aiContext() {
   const s = S(), n = navInfo(), d = new Date();
   const src = source === sim ? 'simulation' : source instanceof ObdSource ? (source.connected ? 'OBD connecté' : 'OBD déconnecté') : 'OBD non connecté';
-  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label + ' (' + describeOpts() + ')'} · galerie ${$('gallery').hidden ? 'fermée' : `ouverte : ${gal.items.length} photos « ${gal.title} », ${gal.mode === 'grid' ? 'grille' : 'photo ' + (gal.i + 1)}, zoom ${gal.z}`}]`;
+  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label + ' (' + describeOpts() + ')'} ${meca.alerts[0] && Date.now() - meca.alerts[0].t < 30 * 60000 ? ' · dernière alerte moteur : ' + meca.alerts[0].titre : ''} · galerie ${$('gallery').hidden ? 'fermée' : `ouverte : ${gal.items.length} photos « ${gal.title} », ${gal.mode === 'grid' ? 'grille' : 'photo ' + (gal.i + 1)}, zoom ${gal.z}`}]`;
 }
 async function askAI(q) {
   const contents = [...AI.hist, { role: 'user', parts: [{ text: `${aiContext()}\n${q}` }] }];
@@ -3034,6 +3073,176 @@ Object.assign(AI_IMPL, {
   repondre_message: async a => !NOTIF || !AI.cfg.messages ? { ok: false, raison: 'lecture des messages désactivée' } : prepareReply(a.texte, a.expediteur)
 });
 
+/* ============================================================
+   MÉCANO DE BORD : valeurs de référence 2.0 JTDM, mémoire 15 min, surveillance, codes défaut
+   ============================================================ */
+// Valeurs typiques d'un 2.0 JTDM 140 ch (Multijet, turbo à géométrie variable). Repères, pas des données constructeur.
+const REF = {
+  eau: '85 à 95 °C moteur chaud (thermostat vers 88 °C) ; au-delà de 105 °C : surchauffe',
+  huile: 'chaude au-dessus de 80 °C, normale 90 à 115 °C ; éviter plus de 3 000 tr/min tant qu\'elle est sous 80 °C',
+  turbo: 'environ 0 à 0,3 bar au ralenti et en croisière légère ; 1,2 à 1,5 bar en pleine charge entre 2 000 et 3 500 tr/min',
+  batterie: 'moteur tournant 13,8 à 14,6 V (charge de l\'alternateur) ; moteur coupé 12,4 à 12,7 V ; au démarrage, ne pas descendre sous 9,6 V',
+  fap: 'régénération déclenchée vers 80 % de suie, 10 à 20 min de roulage ; au-delà de 90 % sans régénération : à surveiller',
+  ralenti: '800 à 900 tr/min moteur chaud',
+  conso: 'environ 4,5 à 5,5 L/100 sur route, 6 à 6,5 à 130 km/h, 6 à 8 en ville'
+};
+function verdicts() {
+  const s = S(), v = {}, run = s.rpm != null && s.rpm > 400;
+  if (s.coolant != null) v.eau = s.coolant < 70 ? 'moteur froid' : s.coolant < 85 ? 'en chauffe' : s.coolant <= 97 ? 'normale' : s.coolant < 105 ? 'chaude, à surveiller' : 'SURCHAUFFE';
+  if (s.oil != null) v.huile = s.oil < 60 ? 'froide : ménager le moteur' : s.oil < 80 ? 'tiède : éviter les hauts régimes' : s.oil <= 115 ? 'chaude, normale' : s.oil < 130 ? 'très chaude' : 'CRITIQUE';
+  if (s.batt != null) v.batterie = run
+    ? (s.batt < 13.2 ? 'charge insuffisante (alternateur ?)' : s.batt < 13.8 ? 'charge un peu faible' : s.batt <= 14.8 ? 'alternateur OK (la santé de la batterie se juge moteur coupé ou au démarrage)' : 'surtension (régulateur ?)')
+    : (s.batt >= 12.6 ? 'batterie pleine' : s.batt >= 12.4 ? 'batterie correcte' : s.batt >= 12.2 ? 'batterie faible' : 'batterie déchargée');
+  if (s.boost != null && s.load != null && run) v.turbo = s.load > 0.8 && s.rpm >= 2000 && s.rpm <= 3500
+    ? (s.boost < 0.9 ? 'pression basse en pleine charge' : s.boost > 1.7 ? 'surpression' : 'pression normale en pleine charge')
+    : "charge partielle : la pression ne se juge qu'en pleine charge (voir historique_moteur)";
+  if (s.soot != null) v.fap = s.regen ? 'régénération en cours : ne pas couper le moteur' : s.soot >= 90 ? 'très chargé' : s.soot >= 75 ? 'chargé, régénération bientôt' : 'normal';
+  if (s.rpm != null && s.speed != null && s.speed < 1 && s.gear === 0 && s.coolant >= 85) v.ralenti = s.rpm < 750 ? 'ralenti bas' : s.rpm > 1000 ? 'ralenti haut' : 'ralenti normal';
+  return v;
+}
+
+/* ---------- Mémoire des 15 dernières minutes ---------- */
+const meca = { buf: [], peaks: {}, warmStart: null, warm: { eau: null, huile: null }, startV: null, preV: null, wasRunning: false, crank: null, alerts: [], cond: {}, last: {} };
+const BANDS = [[1500, 2000], [2000, 2500], [2500, 3000], [3000, 3500], [3500, 4500]];
+function mecaSample(now) {
+  const s = S();
+  if (s.rpm == null && s.coolant == null && s.batt == null) return;
+  meca.buf.push({ t: now, speed: s.speed, rpm: s.rpm, boost: s.boost, load: s.load, coolant: s.coolant, oil: s.oil, batt: s.batt, soot: s.soot, lph: s.lph });
+  while (meca.buf.length && now - meca.buf[0].t > 15 * 60000) meca.buf.shift();
+  if (s.load > 0.8 && s.boost != null && s.rpm) { // pics de turbo en pleine charge, par plage de régime
+    const b = BANDS.find(([a, c]) => s.rpm >= a && s.rpm < c);
+    if (b) { const k = `${b[0]}-${b[1]}`; if (!meca.peaks[k] || s.boost > meca.peaks[k].bar) meca.peaks[k] = { bar: s.boost, rpm: Math.round(s.rpm / 50) * 50, t: now }; }
+  }
+  const running = s.rpm != null && s.rpm > 400;
+  if (!running && s.batt != null) meca.preV = s.batt;
+  if (running && !meca.wasRunning) { // démarrage du moteur
+    meca.crank = { t: now, min: s.batt, pre: meca.preV };
+    if (meca.warmStart == null || (s.coolant != null && s.coolant < 50)) { meca.warmStart = now; meca.warm = { eau: null, huile: null }; }
+  }
+  if (meca.crank && !meca.crank.done) {
+    if (s.batt != null) meca.crank.min = Math.min(meca.crank.min == null ? s.batt : meca.crank.min, s.batt);
+    if (now - meca.crank.t >= 5000) { meca.crank.done = true; meca.startV = { avant: meca.crank.pre, mini: meca.crank.min, apres: s.batt, heure: stamp() }; }
+  }
+  meca.wasRunning = running;
+  if (meca.warmStart == null && running) meca.warmStart = now;
+  if (meca.warmStart != null) {
+    if (meca.warm.eau == null && s.coolant >= 80) meca.warm.eau = (now - meca.warmStart) / 60000;
+    if (meca.warm.huile == null && s.oil >= 80) meca.warm.huile = (now - meca.warmStart) / 60000;
+  }
+}
+function statOf(k, d = 0) {
+  const xs = meca.buf.map(x => x[k]).filter(x => x != null); if (!xs.length) return null;
+  const r = v => Math.round(v * 10 ** d) / 10 ** d;
+  return { min: r(Math.min(...xs)), max: r(Math.max(...xs)), moyenne: r(xs.reduce((a, b) => a + b, 0) / xs.length) };
+}
+function trendOf(k, mins = 5) {
+  const end = meca.buf.length ? meca.buf[meca.buf.length - 1].t : 0, xs = meca.buf.filter(x => x[k] != null && end - x.t <= mins * 60000);
+  if (xs.length < 10) return null;
+  const dt = (xs[xs.length - 1].t - xs[0].t) / 60000;
+  return dt > 0.5 ? Math.round((xs[xs.length - 1][k] - xs[0][k]) / dt * 10) / 10 : null;
+}
+const agoTxt = t => { const m = Math.round((Date.now() - t) / 60000); return m < 1 ? "à l'instant" : `il y a ${m} min`; };
+function mecaHistory() {
+  const dur = meca.buf.length ? Math.round((meca.buf[meca.buf.length - 1].t - meca.buf[0].t) / 60000) : 0;
+  return {
+    periode_min: dur,
+    eau_c: statOf('coolant'), huile_c: statOf('oil'), batterie_v: statOf('batt', 1), turbo_bar: statOf('boost', 2), regime_tr_min: statOf('rpm'), vitesse_kmh: statOf('speed'), suie_fap_pct: statOf('soot'),
+    tendance_eau_c_par_min: trendOf('coolant'), tendance_huile_c_par_min: trendOf('oil'),
+    pics_turbo_pleine_charge: Object.entries(meca.peaks).map(([k, p]) => ({ plage_tr_min: k, pic_bar: Math.round(p.bar * 100) / 100, a_tr_min: p.rpm, quand: agoTxt(p.t) })),
+    demarrage: meca.startV ? { heure: meca.startV.heure, tension_avant_v: r1(meca.startV.avant), tension_mini_v: r1(meca.startV.mini), tension_apres_v: r1(meca.startV.apres), note: 'mesure approximative : OBD lu toutes les 1 à 2 s' } : 'aucun démarrage enregistré',
+    montee_en_temperature_min: { eau_jusqu_a_80c: meca.warm.eau == null ? null : Math.round(meca.warm.eau * 10) / 10, huile_jusqu_a_80c: meca.warm.huile == null ? null : Math.round(meca.warm.huile * 10) / 10 },
+    alertes_recentes: meca.alerts.slice(0, 5).map(a => ({ quand: agoTxt(a.t), alerte: a.titre, detail: a.texte }))
+  };
+}
+
+/* ---------- Surveillance automatique (sans IA, gratuite) ---------- */
+const RULES = [
+  { id: 'surchauffe', lvl: 'crit', sec: 5, cool: 300, test: s => s.coolant != null && s.coolant >= 105,
+    msg: s => [`Surchauffe : eau à ${fr(s.coolant)} °C`, "Levez le pied et surveillez. Si ça continue de monter, arrêtez-vous et laissez tourner au ralenti avant de couper. Normal : 85 à 95 °C."] },
+  { id: 'eau_chaude', lvl: 'warn', sec: 20, cool: 600, test: s => s.coolant != null && s.coolant >= 100 && s.coolant < 105,
+    msg: s => [`Eau chaude : ${fr(s.coolant)} °C`, 'Au-dessus de la normale (85 à 95 °C). Surveillez la jauge, évitez de tirer sur le moteur.'] },
+  { id: 'huile', lvl: 'crit', sec: 5, cool: 300, test: s => s.oil != null && s.oil >= 130,
+    msg: s => [`Huile très chaude : ${fr(s.oil)} °C`, 'Au-delà de 130 °C, ralentissez pour laisser refroidir. Normal : 90 à 115 °C.'] },
+  { id: 'alternateur', lvl: 'warn', sec: 20, cool: 600, test: s => s.rpm > 400 && s.batt != null && s.batt < 13.2,
+    msg: s => [`Tension ${fr(s.batt, 1)} V moteur tournant`, "L'alternateur charge mal (normal : 13,8 à 14,6 V). Courroie, alternateur ou connexion à faire vérifier."] },
+  { id: 'surtension', lvl: 'warn', sec: 10, cool: 600, test: s => s.rpm > 400 && s.batt != null && s.batt > 15.0,
+    msg: s => [`Surtension : ${fr(s.batt, 1)} V`, "Au-dessus de 15 V, le régulateur de l'alternateur est suspect. À faire vérifier."] },
+  { id: 'batterie_faible', lvl: 'warn', sec: 10, cool: 1800, test: s => (s.rpm == null || s.rpm < 300) && s.batt != null && s.batt < 12.2,
+    msg: s => [`Batterie faible : ${fr(s.batt, 1)} V moteur coupé`, 'Une batterie pleine affiche 12,6 V ou plus. Risque de démarrage difficile.'] },
+  { id: 'sous_pression', lvl: 'warn', sec: 3, cool: 300, test: s => s.load > 0.85 && s.rpm >= 2000 && s.rpm <= 3500 && s.boost != null && s.boost < 0.8,
+    msg: s => [`Turbo faible : ${fr(s.boost, 2)} bar en pleine charge`, 'Attendu : 1,2 à 1,5 bar. Possible fuite de durite, capteur ou commande du turbo (souvent code P0299).'] },
+  { id: 'surpression', lvl: 'warn', sec: 2, cool: 300, test: s => s.boost != null && s.boost > 1.75,
+    msg: s => [`Surpression turbo : ${fr(s.boost, 2)} bar`, 'Au-delà de 1,7 bar, la régulation du turbo est suspecte (code P0234 possible).'] },
+  { id: 'fap', lvl: 'warn', sec: 30, cool: 1800, test: s => s.soot != null && s.soot >= 90 && !s.regen,
+    msg: s => [`Filtre à particules chargé à ${fr(s.soot)} %`, "La régénération ne s'est pas faite. Un trajet de 20 minutes sur voie rapide au-dessus de 2 000 tr/min devrait la déclencher."] }
+];
+function raiseAlert(lvl, titre, texte) {
+  meca.alerts.unshift({ t: Date.now(), lvl, titre, texte }); meca.alerts.splice(10);
+  holo('Alerte moteur', `<div class="dtc" data-state="${lvl}"><b>${esc(titre)}</b><span>${esc(texte)}</span></div><p class="note">Dites « Jarvis, explique-moi » pour plus de détails.</p>`, { kicker: 'Surveillance', ms: 30000 });
+  say(`${titre}. ${texte.split('. ')[0].replace(/\.$/, '')}.`);
+}
+function mecaMonitor(now) {
+  if (!(source === sim || (source instanceof ObdSource && source.connected))) return;
+  const s = S();
+  RULES.forEach(r => {
+    if (!r.test(s)) { meca.cond[r.id] = 0; return; }
+    if (!meca.cond[r.id]) meca.cond[r.id] = now;
+    if (now - meca.cond[r.id] < r.sec * 1000) return;
+    if (meca.last[r.id] && now - meca.last[r.id] < r.cool * 1000) return;
+    meca.last[r.id] = now; raiseAlert(r.lvl, ...r.msg(s));
+  });
+  if (meca.startV && !meca.startV.checked) {
+    meca.startV.checked = true;
+    if (meca.startV.mini != null && meca.startV.mini < 9.6) raiseAlert('warn', `Démarrage difficile : ${fr(meca.startV.mini, 1)} V`, 'La tension est descendue sous 9,6 V au démarrage : batterie fatiguée, à faire tester avant l\'hiver.');
+  }
+}
+
+/* ---------- Codes défaut (OBD mode 03 mémorisés, 07 en attente) ---------- */
+const DTC_FR = {
+  P0087: 'Pression de rampe d\'injection trop basse (filtre à gazole, pompe haute pression, régulateur)', P0088: 'Pression de rampe d\'injection trop élevée', P0093: 'Fuite de carburant détectée',
+  P0100: 'Débitmètre d\'air : circuit', P0101: 'Débitmètre d\'air : valeur incohérente', P0102: 'Débitmètre d\'air : signal bas', P0103: 'Débitmètre d\'air : signal haut',
+  P0115: 'Sonde de température d\'eau : circuit', P0116: 'Sonde de température d\'eau : valeur incohérente', P0117: 'Sonde de température d\'eau : signal bas', P0118: 'Sonde de température d\'eau : signal haut',
+  P0128: 'Thermostat : l\'eau met trop longtemps à chauffer', P0234: 'Surpression turbo', P0299: 'Pression turbo insuffisante', P0335: 'Capteur de régime vilebrequin', P0340: 'Capteur d\'arbre à cames',
+  P0380: 'Bougies de préchauffage : circuit', P0381: 'Témoin de préchauffage', P0400: 'Recirculation des gaz (EGR) : débit', P0401: 'EGR : débit insuffisant (vanne souvent encrassée)', P0402: 'EGR : débit excessif', P0403: 'EGR : circuit de commande', P0404: 'EGR : position incohérente',
+  P0420: 'Catalyseur : efficacité insuffisante', P0470: 'Capteur de pression d\'échappement', P0471: 'Capteur de pression d\'échappement : valeur incohérente', P0472: 'Capteur de pression d\'échappement : signal bas', P0473: 'Capteur de pression d\'échappement : signal haut',
+  P0480: 'Ventilateur de refroidissement : commande', P0500: 'Capteur de vitesse du véhicule', P0562: 'Tension du système trop basse', P0563: 'Tension du système trop haute', P0606: 'Calculateur moteur : défaut interne',
+  P0670: 'Préchauffage : module de commande', P0671: 'Bougie de préchauffage 1', P0672: 'Bougie de préchauffage 2', P0673: 'Bougie de préchauffage 3', P0674: 'Bougie de préchauffage 4',
+  P0201: 'Injecteur 1 : circuit', P0202: 'Injecteur 2 : circuit', P0203: 'Injecteur 3 : circuit', P0204: 'Injecteur 4 : circuit',
+  P2002: 'Filtre à particules : efficacité insuffisante', P2263: 'Turbo : performance de la suralimentation', P2452: 'Capteur de pression différentielle du FAP : circuit', P2453: 'Capteur de pression différentielle du FAP : valeur incohérente',
+  P2454: 'Capteur de pression du FAP : signal bas', P2455: 'Capteur de pression du FAP : signal haut', P2458: 'FAP : régénération trop longue', P2463: 'FAP : accumulation de suie excessive', P242F: 'FAP : accumulation de cendres',
+  U0100: 'Perte de communication avec le calculateur moteur', U0101: 'Perte de communication avec la boîte de vitesses', U0121: 'Perte de communication avec l\'ABS', U0155: 'Perte de communication avec le combiné'
+};
+function dtcLabel(c) {
+  return DTC_FR[c] || (({ P: 'Moteur / transmission', C: 'Châssis', B: 'Carrosserie', U: 'Réseau de communication' }[c[0]] || 'Système') + (c[1] === '0' || c[1] === '2' ? ' (code normalisé, à faire expliquer)' : ' (code propre au constructeur)'));
+}
+function decodeDtcs(resp, svc) { // svc : '43' (mode 03), '47' (mode 07)
+  const lines = (resp || '').toUpperCase().replace(/SEARCHING\.\.\.|BUSINIT\.*/g, '').split(/[\r\n>]+/).map(l => l.trim()).filter(Boolean);
+  if (!lines.length || lines.every(l => /NO ?DATA|ERROR|\?/.test(l))) return [];
+  const hex = lines.filter(l => !/^[0-9A-F]{3}$/.test(l.replace(/\s/g, ''))).map(l => l.replace(/^\s*[0-9A-F]:/, '')).join('').replace(/[^0-9A-F]/g, '');
+  const out = new Set(); let k = hex.indexOf(svc);
+  while (k >= 0) {
+    let p = k + 2; const n = parseInt(hex.substr(p, 2), 16);
+    const can = !isNaN(n) && n <= 30 && hex.length >= p + 2 + n * 4;
+    if (can) p += 2;
+    const count = can ? n : Math.floor((hex.length - p) / 4);
+    for (let i = 0; i < count; i++) {
+      const w = hex.substr(p + i * 4, 4); if (w.length < 4 || w === '0000') continue;
+      const b = parseInt(w, 16); out.add('PCBU'[b >> 14] + ((b >> 12) & 3) + (b & 0xFFF).toString(16).toUpperCase().padStart(3, '0'));
+    }
+    k = hex.indexOf(svc, p + count * 4);
+  }
+  return [...out];
+}
+
+AI_TOOLS.push(
+  { name: 'historique_moteur', description: "Mémoire des 15 dernières minutes : minimum, maximum et moyenne (eau, huile, batterie, turbo, régime), tendances de température, pics de turbo en pleine charge par plage de régime, tension au démarrage, temps de montée en température, alertes récentes." },
+  { name: 'alertes_moteur', description: 'Alertes déclenchées par la surveillance automatique (surchauffe, tension, turbo, FAP…).' }
+);
+Object.assign(AI_IMPL, {
+  historique_moteur: async () => mecaHistory(),
+  alertes_moteur: async () => ({ alertes: meca.alerts.map(a => ({ quand: agoTxt(a.t), niveau: a.lvl === 'crit' ? 'critique' : 'attention', alerte: a.titre, detail: a.texte })) })
+});
+
 // Commandes simples et boutons rapides : exécutés sans IA (instantané, zéro requête du quota)
 function isQuickCommand(q) {
   const t = norm(q).replace(/[!?.,]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^jarvis /, '').replace(/ (stp|s il te plait|s il vous plait)$/, '');
@@ -3193,6 +3402,7 @@ function frame(now) {
     slowAcc = 0; renderTrip();
     if (HOSTED) updateSpeedLimit();
     renderSpeedLimit(now); fuelAlerts();
+    mecaSample(Date.now()); mecaMonitor(Date.now());
     const au = autonomy();
     $('range').innerHTML = au.km == null ? 'NONE' : `${au.km}<small>km</small>`;
     $('fuelStat').dataset.state = au.km == null ? 'na' : au.km < 40 ? 'crit' : au.km < 80 ? 'warn' : 'ok';

@@ -1,5 +1,5 @@
 // Service worker : l'appli marche même sans réseau (la carte et les itinéraires, eux, en ont besoin)
-const CACHE = 'jarvis-20261105-161026';
+const CACHE = 'jarvis-20261105-163220';
 const SHELL = ['./', './index.html', './manifest.webmanifest', './lib/leaflet.js', './lib/leaflet.css', './icons/icon-192.png', './icons/icon-512.png'];
 const TILES = 'jarvis-tiles';
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(SHELL))); self.skipWaiting(); });
