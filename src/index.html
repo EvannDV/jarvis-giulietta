@@ -161,13 +161,14 @@ button{cursor:pointer}
 /* Vraie carte (version installée) : tournée dans le sens de la marche */
 #realWrap{position:absolute;inset:0;overflow:hidden;background:var(--panel-2)}
 #realMap{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(var(--rot,0deg));transition:transform .9s linear;background:var(--panel-2)}
-#realMap .leaflet-tile-pane{filter:sepia(1) hue-rotate(150deg) saturate(2.4) brightness(.9) contrast(1.1)}
-:root[data-dna="D"] #realMap .leaflet-tile-pane{filter:sepia(1) hue-rotate(-38deg) saturate(3.2) brightness(.85) contrast(1.15)}
-:root[data-dna="A"] #realMap .leaflet-tile-pane{filter:sepia(1) hue-rotate(175deg) saturate(1.7) brightness(.95) contrast(1.05)}
+#realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.7) contrast(1.2) sepia(1) hue-rotate(155deg) saturate(2.6)}
+:root[data-dna="D"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.6) contrast(1.25) sepia(1) hue-rotate(-35deg) saturate(3.4)}
+:root[data-dna="A"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.75) contrast(1.15) sepia(1) hue-rotate(178deg) saturate(1.9)}
 .route-line{filter:drop-shadow(0 0 6px var(--acc))}
 .car-ico{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);color:var(--text);filter:drop-shadow(0 0 10px var(--acc));pointer-events:none}
 .attrib{position:absolute;right:12px;bottom:58px;font-family:var(--f-mono);font-size:9px;color:var(--muted);background:rgba(var(--bg-rgb),.6);padding:1px 4px}
-.map-msg{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);text-align:center;color:var(--muted);font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase}
+.map-msg{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:min(86%,340px);text-align:center;color:var(--text);font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:rgba(var(--bg-rgb),.85);border:1px solid var(--line-hi);padding:10px 12px;cursor:pointer}
+.map-msg small{display:block;margin-top:6px;color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:13px}
 .turn{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(var(--bg-rgb),.82);border:1px solid var(--line-hi)}
 .turn svg{flex:none;width:40px;height:40px;color:var(--acc)}
 .turn b{display:block;font-family:var(--f-display);font-size:24px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.05}
@@ -482,7 +483,7 @@ button{cursor:pointer}
         <div id="realWrap" hidden><div id="realMap"></div>
           <svg class="car-ico" viewBox="0 0 34 34" aria-hidden="true"><path d="M17 3l11 26-11-6-11 6z" fill="currentColor"/></svg>
           <span class="map-msg" id="mapMsg">Recherche du signal GPS…</span>
-          <span class="attrib">© OpenStreetMap · © CARTO · OSRM</span>
+          <span class="attrib">© contributeurs OpenStreetMap · OSRM</span>
         </div>
         <div class="turn">
           <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path id="turnIco" d="M14 36V18h14M22 11l7 7-7 7"/></svg>
@@ -1194,12 +1195,26 @@ async function initRealMap() {
   try { await loadLeaflet(); } catch (e) { say("Impossible de charger la carte. Je garde la carte de démonstration."); return; }
   $('map').hidden = true; $('realWrap').hidden = false;
   nav.map = L.map('realMap', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, boxZoom: false, keyboard: false }).setView([46.6, 2.4], 6);
-  L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', { subdomains: 'abcd', maxZoom: 19 }).addTo(nav.map);
+  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(nav.map);
   nav.layer = L.layerGroup().addTo(nav.map);
   sizeRealMap(); addEventListener('resize', sizeRealMap);
-  if (!navigator.geolocation) { $('mapMsg').textContent = 'Pas de GPS sur cet appareil'; return; }
-  navigator.geolocation.watchPosition(onFix, e => { $('mapMsg').hidden = false; $('mapMsg').textContent = e.code === 1 ? 'Accès à la position refusé' : 'Signal GPS indisponible'; },
-    { enableHighAccuracy: true, maximumAge: 1000, timeout: 20000 });
+  if (!navigator.geolocation) { nav.err = 'Pas de GPS sur cet appareil'; $('mapMsg').textContent = nav.err; return; }
+  $('mapMsg').addEventListener('click', startGeo);
+  startGeo();
+}
+function startGeo() {
+  if (nav.watch != null) navigator.geolocation.clearWatch(nav.watch);
+  nav.err = null;
+  if (!nav.gps) { $('mapMsg').hidden = false; $('mapMsg').textContent = 'Recherche du signal GPS…'; }
+  nav.watch = navigator.geolocation.watchPosition(onFix, e => {
+    if (e.code !== 1 && nav.gps) return; // perte ponctuelle : on garde la dernière position
+    nav.err = e.code === 1 ? 'Accès à la position refusé' : 'Signal GPS indisponible';
+    $('mapMsg').hidden = false;
+    $('mapMsg').innerHTML = e.code === 1
+      ? 'Accès à la position refusé<small>Autorisez la position pour ce site dans Chrome, puis touchez ici.</small>'
+      : 'Signal GPS indisponible<small>Vérifiez que la localisation Android est activée, puis touchez ici.</small>';
+    if (e.code === 1 && !nav.saidDenied) { nav.saidDenied = true; say("Je n'ai pas accès à votre position, monsieur. Autorisez-la dans Chrome, puis touchez la carte."); }
+  }, { enableHighAccuracy: true, maximumAge: 1000, timeout: 30000 });
 }
 function onFix(p) {
   const c = p.coords, prev = nav.gps;
@@ -1254,7 +1269,7 @@ function progressRoute() {
 }
 function realNavInfo() {
   const now = Date.now(), fmtT = t => new Date(t).toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
-  if (!nav.route || !nav.gps) return { kind: 'none', street: nav.gps ? 'Pas d\'itinéraire. Dites « aller à … »' : 'Recherche du signal GPS…', dist: null, remain: null, eta: '--:--', label: 'Navigation' };
+  if (!nav.route || !nav.gps) return { kind: 'none', street: nav.gps ? 'Pas d\'itinéraire. Dites « aller à … »' : nav.err || 'Recherche du signal GPS…', dist: null, remain: null, eta: '--:--', label: 'Navigation' };
   const st = nav.steps[nav.next], [lo, la] = st.maneuver.location, dist = distM(nav.gps, { lat: la, lon: lo });
   let remain = dist; for (let k = nav.next; k < nav.steps.length; k++) remain += nav.steps[k].distance;
   const avg = nav.route.distance / Math.max(1, nav.route.duration);

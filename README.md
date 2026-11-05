@@ -36,7 +36,7 @@ Re-téléversez les fichiers modifiés dans le dépôt GitHub. La tablette récu
 ## Services utilisés
 
 Tous gratuits pour un usage personnel :
-- Carte : © OpenStreetMap, fond de carte © CARTO
+- Carte : tuiles © contributeurs OpenStreetMap
 - Recherche d'adresses : Nominatim (OpenStreetMap)
 - Itinéraires : serveur public OSRM
 - Carte affichée avec Leaflet (inclus dans `lib/`)
