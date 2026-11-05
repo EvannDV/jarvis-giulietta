@@ -297,6 +297,23 @@ button{cursor:pointer}
 .core i:nth-child(2){inset:10px;opacity:.8}
 .core i:nth-child(3){inset:20px;background:var(--acc);box-shadow:0 0 18px var(--acc)}
 .core.talk i:nth-child(3){animation:pulse .5s ease-in-out infinite alternate}
+.core.think i:nth-child(1){animation-duration:1.1s}
+.core.think i:nth-child(2){animation:pulse .3s ease-in-out infinite alternate}
+.set{display:flex;flex-direction:column;gap:12px}
+.set label{display:flex;flex-direction:column;gap:4px;font-size:13px;color:var(--muted)}
+.set label.chk{flex-direction:row;align-items:center;gap:10px;font-size:15px;color:var(--text)}
+.set .chk input{width:20px;height:20px;accent-color:var(--acc)}
+.set select.in{height:36px}
+.set .row{display:flex;gap:8px;flex-wrap:wrap}
+.wx{display:flex;gap:14px;align-items:center;border:1px solid var(--line);padding:10px 12px}
+.wx > b{font-family:var(--f-display);font-size:46px;font-weight:600;line-height:1;color:var(--acc)}
+.wx div{display:flex;flex-direction:column;gap:3px;min-width:0}
+.wx div span:first-child{font-size:17px;text-transform:capitalize}
+.news{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:10px}
+.news li{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;align-items:start}
+.news img,.news .noimg{width:96px;aspect-ratio:3/2;object-fit:cover;border:1px solid var(--line);background:var(--panel-2)}
+.news b{display:block;font-size:15px;line-height:1.25}
+.news span{display:block;color:var(--muted);font-size:13px;line-height:1.3;margin-top:2px}
 .log{height:72px;overflow-y:auto;display:flex;flex-direction:column;gap:4px;font-size:15px;line-height:1.35;scrollbar-width:thin;scrollbar-color:var(--line) transparent}
 .msg{display:grid;grid-template-columns:auto 1fr;gap:10px}
 .msg time{font-family:var(--f-mono);font-size:11px;color:var(--muted);padding-top:2px}
@@ -464,8 +481,11 @@ button{cursor:pointer}
         <button data-dna="N" aria-pressed="true" title="Natural : mode normal">N</button>
         <button data-dna="A" aria-pressed="false" title="All-weather : mode pluie">A</button>
       </div>
+      <button class="icon-btn" id="setBtn" aria-label="Réglages de Jarvis" title="Réglages de Jarvis (clé Gemini, briefing, voix)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3.2"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+      </button>
       <button class="icon-btn" id="nightBtn" title="Luminosité : automatique, nuit ou jour">Auto</button>
-      <div class="clock"><span class="ext"><span id="ext">11</span> °C</span><span class="time" id="time">--:--</span></div>
+      <div class="clock"><span class="ext"><span id="ext">--</span> °C</span><span class="time" id="time">--:--</span></div>
       <button class="icon-btn" id="fs" aria-label="Plein écran" title="Plein écran">
         <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M1 5V1h4M11 1h4v4M15 11v4h-4M5 15H1v-4"/></svg>
       </button>
@@ -1343,6 +1363,7 @@ function startGeo() {
 function onFix(p) {
   const c = p.coords, prev = nav.gps;
   nav.gps = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, spd: c.speed };
+  if (!nav.posSaved || Date.now() - nav.posSaved > 60000) { nav.posSaved = Date.now(); store.set('lastPos', { lat: nav.gps.lat, lon: nav.gps.lon, t: nav.posSaved }); }
   $('mapMsg').hidden = true;
   if (!prev) say('Signal GPS acquis.');
   let h = c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5 ? c.heading : null;
@@ -1354,21 +1375,25 @@ function onFix(p) {
   nav.map.setView([nav.gps.lat, nav.gps.lon], z, { animate: true, duration: 0.9 });
   progressRoute();
 }
-async function routeTo(query) {
-  if (!HOSTED) { say('La vraie navigation fonctionne depuis la version installée sur la tablette. Ici, la carte reste en démo.'); return; }
-  if (!nav.gps) { say("J'attends le signal GPS, monsieur."); return; }
+// quiet = appel par l'IA : pas de message, on renvoie le résultat
+async function routeTo(query, quiet) {
+  const fail = raison => { if (!quiet) say(raison); return { ok: false, raison }; };
+  if (!HOSTED) return fail('La vraie navigation fonctionne depuis la version installée sur la tablette. Ici, la carte reste en démo.');
+  if (!nav.gps) return fail("J'attends le signal GPS, monsieur.");
   try {
     const g = nav.gps, vb = `${g.lon - 0.7},${g.lat + 0.5},${g.lon + 0.7},${g.lat - 0.5}`;
     const r = await fetch(`https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&accept-language=fr&viewbox=${vb}&q=${encodeURIComponent(query)}`).then(r => r.json());
-    if (!r.length) { say(`Je ne trouve pas « ${query} ».`); return; }
-    nav.dest = { lat: +r[0].lat, lon: +r[0].lon, name: r[0].name || r[0].display_name.split(',')[0] };
-    await computeRoute(true);
-  } catch (e) { say("Je n'arrive pas à joindre le service de cartes. Vérifiez la connexion Internet."); }
+    if (!r.length) return fail(`Je ne trouve pas « ${query} ».`);
+    nav.dest = { lat: +r[0].lat, lon: +r[0].lon, name: r[0].name || r[0].display_name.split(',')[0], adresse: r[0].display_name };
+    const res = await computeRoute(!quiet);
+    if (quiet && page !== 'nav' && page !== 'drive') goPage('nav');
+    return res;
+  } catch (e) { return fail("Je n'arrive pas à joindre le service de cartes. Vérifiez la connexion Internet."); }
 }
 async function computeRoute(announce) {
   const g = nav.gps, d = nav.dest; nav.lastReroute = Date.now();
   const j = await fetch(`https://router.project-osrm.org/route/v1/driving/${g.lon},${g.lat};${d.lon},${d.lat}?overview=full&geometries=geojson&steps=true`).then(r => r.json());
-  if (j.code !== 'Ok' || !j.routes.length) { say('Aucun itinéraire trouvé.'); return; }
+  if (j.code !== 'Ok' || !j.routes.length) { if (announce) say('Aucun itinéraire trouvé.'); return { ok: false, raison: 'aucun itinéraire trouvé' }; }
   const rt = j.routes[0];
   nav.route = rt; nav.steps = rt.legs[0].steps; nav.next = 1; nav.off = 0; nav.said = -1;
   nav.line = rt.geometry.coordinates.map(([lo, la]) => [la, lo]);
@@ -1377,6 +1402,7 @@ async function computeRoute(announce) {
   L.circleMarker([d.lat, d.lon], { radius: 9, color: T['--amber'], fillColor: T['--amber'], fillOpacity: 1 }).addTo(nav.layer);
   const n = realNavInfo();
   if (announce) say(`Itinéraire vers ${d.name} : ${fmtDist(rt.distance)}, environ ${fmtDur(rt.duration)}. Arrivée prévue à ${n.eta}.`);
+  return { ok: true, destination: d.name, adresse: d.adresse, distance: fmtDist(rt.distance), duree: fmtDur(rt.duration), arrivee: n.eta, premiere_consigne: n.street };
 }
 function clearRoute() { nav.route = null; nav.dest = null; nav.steps = []; if (nav.layer) nav.layer.clearLayers(); }
 function progressRoute() {
@@ -1529,8 +1555,9 @@ const DTC_DEMO = [
   { code: 'P0401', st: 'warn', kind: 'mémorisé', title: 'Débit de recirculation des gaz (EGR) insuffisant', expl: "Souvent une vanne EGR encrassée, classique sur les diesels qui roulent beaucoup en ville. Pas urgent : un long trajet sur autoroute aide, sinon un nettoyage de la vanne." }
 ];
 let diagBusy = false;
-function runDiag() {
-  if (diagBusy) return; diagBusy = true;
+function runDiag(quiet) {
+  if (diagBusy) return Promise.resolve({ ok: false, raison: 'diagnostic déjà en cours' }); diagBusy = true;
+  return new Promise(done => {
   $('diagBtn').disabled = true;
   $('diagOut').innerHTML = '<p class="note">Interrogation du calculateur moteur…</p>';
   holo('Diagnostic', '<p>Interrogation du calculateur moteur, de l\'ABS et de l\'airbag…</p><div class="himg">Lecture des codes défaut</div>', { kicker: 'Diagnostic · simulation', ms: 0 });
@@ -1538,11 +1565,13 @@ function runDiag() {
     const html = DTC_DEMO.map(d => `<div class="dtc" data-state="${d.st}"><b>${d.code} · ${d.kind}</b><span><strong>${d.title}.</strong> ${d.expl}</span></div>`).join('');
     $('diagOut').innerHTML = `<p class="note">Aucun code actif. 1 code mémorisé (exemple simulé).</p>${html}`;
     holo('Diagnostic terminé', `<p>Aucun défaut actif. Un code est mémorisé :</p>${html}<p class="note">Exemple simulé. Les vrais codes viendront de l'OBD à l'étape 2.</p>`, { kicker: 'Diagnostic · simulation' });
-    say("Diagnostic terminé, monsieur. Aucun défaut actif. Un code mémorisé : P0401, la vanne EGR s'encrasse. Rien d'urgent, un trajet sur autoroute lui fera du bien.");
+    if (!quiet) say("Diagnostic terminé, monsieur. Aucun défaut actif. Un code mémorisé : P0401, la vanne EGR s'encrasse. Rien d'urgent, un trajet sur autoroute lui fera du bien.");
     $('diagBtn').disabled = false; diagBusy = false;
+    done({ simulation: true, codes_actifs: [], codes_memorises: DTC_DEMO.map(d => ({ code: d.code, titre: d.title, explication: d.expl })) });
   }, 2400);
+  });
 }
-$('diagBtn').addEventListener('click', runDiag);
+$('diagBtn').addEventListener('click', () => runDiag());
 
 /* ============================================================
    PERF : chronos 0-100 et 80-120
@@ -1871,7 +1900,7 @@ $('holoClose').addEventListener('click', closeHolo);
    JARVIS : console, voix, personnalité
    ============================================================ */
 const logEl = $('log'), core = $('core');
-let voiceOn = false;
+let voiceOn = !!store.get('voice', false);
 const stamp = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 function addMsg(text, me) {
   const m = document.createElement('div'); m.className = 'msg' + (me ? ' me' : '');
@@ -1961,25 +1990,329 @@ function answer(q) {
     : `Filtre à particules chargé à ${fr(s.soot)} %. ${s.regens} régénération${s.regens > 1 ? 's' : ''} depuis le démarrage.`;
   if (/itin|gps|route|nav|arriv/.test(t)) return n.dist == null ? n.street : `Dans ${fmtDist(n.dist)} : ${n.street.toLowerCase()}. Arrivée prévue à ${n.eta}, ${fmtDist(n.remain)} restants.`;
   if (/actu|news|info|journal/.test(t)) {
-    holo('Actualités', `<div class="himg">Image d'actualité<br>disponible à l'étape 4</div><p>Une fois relié à Internet, j'afficherai ici les titres du jour avec leurs images, et je pourrai vous les lire.</p>`, { kicker: 'Actualités · bientôt' });
-    return 'Les actualités arriveront avec la connexion Internet, à l\'étape 4.';
+    const rub = /sport/.test(t) ? 'sport' : /monde|international/.test(t) ? 'international' : /eco/.test(t) ? 'economie' : /science/.test(t) ? 'sciences' : /tech/.test(t) ? 'technologies' : /politique/.test(t) ? 'politique' : 'une';
+    AI_IMPL.actualites({ rubrique: rub }).then(r => say(r.articles ? `À la une : ${r.articles[0].titre}. Les autres titres sont à l'écran.` : 'Aucun article pour le moment.'))
+      .catch(() => say(NATIVE ? "Je n'arrive pas à joindre Le Monde. Vérifiez la connexion Internet." : "Les actualités avec images fonctionnent dans l'appli Android."));
+    return null;
   }
   if (/meteo|pluie|temps qu/.test(t)) {
-    holo('Météo', `<div class="hgrid"><div><span class="label">Dehors</span><b>${fr(s.ext)} °C</b></div><div><span class="label">Prévisions</span><b>étape 4</b></div></div><p>Les prévisions heure par heure arriveront avec la connexion Internet.</p>`, { kicker: 'Météo' });
-    return `Il fait ${fr(s.ext)} °C dehors.`;
+    AI_IMPL.meteo({}).then(w => say(w.ok === false ? "Je n'ai pas encore votre position pour la météo." : `Il fait ${w.temperature} degrés, ${w.ciel}. ${w.pluie_prevue_vers ? 'Pluie probable vers ' + w.pluie_prevue_vers + '.' : 'Pas de pluie prévue dans les prochaines heures.'}`))
+      .catch(() => say('La météo est indisponible pour le moment.'));
+    return null;
   }
   if (/merci/.test(t)) return pick(['À votre service.', 'Toujours un plaisir, monsieur.']);
   if (/bonjour|salut|jarvis|hello|bonsoir/.test(t)) return `${greeting()}. Que puis-je faire pour vous ?`;
   return "Je ne sais pas encore répondre à ça. Une fois relié à Claude, je pourrai répondre à n'importe quelle question.";
 }
-function ask(q) { q = q.trim(); if (!q) return; addMsg(q, true); setTimeout(() => { const a = answer(q); if (a) say(a); }, 350); }
+/* ============================================================
+   CERVEAU : Gemini (Google) + outils + météo + actualités + briefing
+   La clé API est saisie dans les réglages et reste sur l'appareil (localStorage).
+   ============================================================ */
+const esc = t => String(t == null ? '' : t).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const AI = {
+  cfg: Object.assign({ key: '', model: 'gemini-3.1-flash-lite', briefing: true }, store.get('ai', {})),
+  hist: [], chain: Promise.resolve(), offlineSaid: false
+};
+// anciens alias « latest » trop souvent surchargés : on les remplace
+AI.cfg.model = { 'gemini-flash-lite-latest': 'gemini-3.1-flash-lite', 'gemini-flash-latest': 'gemini-3.5-flash' }[AI.cfg.model] || AI.cfg.model;
+const GEMINI_URL = m => `https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`;
+// modèle choisi d'abord, puis secours si Google est surchargé (testés : Flash-Lite 3.1 ≈ 1 s, Flash 3.5 ≈ 3 s)
+const AI_MODELS = () => [...new Set([AI.cfg.model, 'gemini-3.1-flash-lite', 'gemini-3.5-flash', 'gemini-3.5-flash-lite'])];
+const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Tu parles au conducteur : tu le vouvoies et l'appelles parfois « monsieur », avec le flegme britannique et la pointe d'humour du Jarvis d'Iron Man.
+Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases courtes, sans liste, sans markdown, sans émoji.
+Pour toute action (itinéraire, musique, mode DNA, page, luminosité, diagnostic, météo, actualités), appelle l'outil correspondant au lieu d'annoncer que tu vas le faire.
+Quand une réponse mérite des détails (liste, explication longue, comparaison), affiche-les avec afficher_fenetre et résume-les en une phrase à l'oral.
+Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n'est pas disponible (adaptateur déconnecté ou donnée non transmise par la voiture) : dis-le simplement et n'invente jamais de valeur. Si la source est « simulation », précise que ce sont des données de démonstration.
+N'invente ni actualités ni météo : utilise les outils. Si un outil échoue, explique brièvement pourquoi.`;
+
+async function gemini(body, models = AI_MODELS()) {
+  let lastErr = null;
+  for (const m of models) {
+    const ctl = new AbortController(), to = setTimeout(() => ctl.abort(), /lite/.test(m) ? 9000 : 15000);
+    try {
+      const r = await fetch(GEMINI_URL(m), { method: 'POST', signal: ctl.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': AI.cfg.key }, body: JSON.stringify(body) });
+      const j = await r.json().catch(() => ({}));
+      clearTimeout(to);
+      if (r.ok) return j;
+      lastErr = new Error((j.error && j.error.message) || 'HTTP ' + r.status); lastErr.status = r.status;
+      if (![429, 500, 503, 504].includes(r.status)) throw lastErr; // clé invalide, requête refusée : inutile d'essayer un autre modèle
+    } catch (e) {
+      clearTimeout(to);
+      if (e.status && ![429, 500, 503, 504].includes(e.status)) throw e;
+      lastErr = e.name === 'AbortError' ? new Error('délai dépassé') : e;
+    }
+  }
+  throw lastErr || new Error('aucun modèle disponible');
+}
+
+/* ---------- Météo : Open-Meteo (gratuit, sans clé) ---------- */
+const WMO = { 0: 'ciel dégagé', 1: 'plutôt dégagé', 2: 'partiellement nuageux', 3: 'couvert', 45: 'brouillard', 48: 'brouillard givrant', 51: 'bruine légère', 53: 'bruine', 55: 'bruine dense', 56: 'bruine verglaçante', 57: 'bruine verglaçante', 61: 'pluie faible', 63: 'pluie', 65: 'forte pluie', 66: 'pluie verglaçante', 67: 'pluie verglaçante', 71: 'neige faible', 73: 'neige', 75: 'forte neige', 77: 'grains de neige', 80: 'averses', 81: 'averses', 82: 'fortes averses', 85: 'averses de neige', 86: 'averses de neige', 95: 'orage', 96: 'orage et grêle', 99: 'orage et grêle' };
+let wxNow = null;
+async function geocodeCity(name) {
+  const j = await fetch(`https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(name)}&count=1&language=fr`).then(r => r.json());
+  const g = j.results && j.results[0]; if (!g) throw new Error(`lieu « ${name} » introuvable`);
+  return { lat: g.latitude, lon: g.longitude, name: g.name };
+}
+async function fetchWeather(lat, lon, name) {
+  const u = `https://api.open-meteo.com/v1/forecast?latitude=${lat.toFixed(3)}&longitude=${lon.toFixed(3)}&current=temperature_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=precipitation_probability,temperature_2m,weather_code&daily=temperature_2m_max,temperature_2m_min,precipitation_probability_max,weather_code&timezone=auto&forecast_days=2`;
+  const j = await fetch(u).then(r => r.json());
+  if (!j.current) throw new Error('météo indisponible');
+  const c = j.current, h = j.hourly, d = j.daily;
+  let i0 = h.time.findIndex(t => t.slice(0, 13) === c.time.slice(0, 13)); if (i0 < 0) i0 = 0;
+  const next = h.time.slice(i0, i0 + 12).map((t, k) => ({ heure: +t.slice(11, 13), pluie: h.precipitation_probability[i0 + k], code: h.weather_code[i0 + k] }));
+  const rainAt = next.find(x => x.pluie >= 60);
+  const w = {
+    lieu: name || null, temperature: Math.round(c.temperature_2m), ressenti: Math.round(c.apparent_temperature), ciel: WMO[c.weather_code] || 'conditions inconnues',
+    code: c.weather_code, vent_kmh: Math.round(c.wind_speed_10m), pluie_maintenant_mm: c.precipitation,
+    pluie_probable_3h_pct: Math.max(...next.slice(0, 3).map(x => x.pluie || 0)), pluie_prevue_vers: rainAt ? `${rainAt.heure} h` : null,
+    min: Math.round(d.temperature_2m_min[0]), max: Math.round(d.temperature_2m_max[0]),
+    demain: { min: Math.round(d.temperature_2m_min[1]), max: Math.round(d.temperature_2m_max[1]), ciel: WMO[d.weather_code[1]] || '', pluie_pct: d.precipitation_probability_max[1] }
+  };
+  if (!name) { wxNow = w; wxNow.at = Date.now(); }
+  return w;
+}
+function lastPosition() {
+  if (nav.gps) return nav.gps;
+  const p = store.get('lastPos', null); return p && p.lat ? p : null;
+}
+async function waitPosition(ms) {
+  const t0 = Date.now();
+  while (!nav.gps && Date.now() - t0 < ms && HOSTED) await new Promise(r => setTimeout(r, 400));
+  return lastPosition();
+}
+const rainy = w => w && (w.pluie_probable_3h_pct >= 60 || (w.code >= 51 && w.code <= 67) || (w.code >= 80 && w.code <= 82) || w.code >= 95);
+function weatherCard(w) {
+  return `<div class="wx"><b>${w.temperature}°</b><div><span>${esc(w.ciel)}${w.lieu ? ' · ' + esc(w.lieu) : ''}</span>
+    <span class="label">ressenti ${w.ressenti}° · min ${w.min}° · max ${w.max}° · vent ${w.vent_kmh} km/h</span>
+    <span class="label">${w.pluie_prevue_vers ? 'pluie probable vers ' + esc(w.pluie_prevue_vers) : 'pas de pluie prévue dans les 12 h'}</span></div></div>`;
+}
+
+/* ---------- Actualités : flux RSS du Monde (avec images) ---------- */
+const NEWS_FEEDS = {
+  une: 'https://www.lemonde.fr/rss/une.xml', international: 'https://www.lemonde.fr/international/rss_full.xml',
+  politique: 'https://www.lemonde.fr/politique/rss_full.xml', economie: 'https://www.lemonde.fr/economie/rss_full.xml',
+  sport: 'https://www.lemonde.fr/sport/rss_full.xml', sciences: 'https://www.lemonde.fr/sciences/rss_full.xml',
+  technologies: 'https://www.lemonde.fr/pixels/rss_full.xml'
+};
+async function fetchNews(rubrique) {
+  const url = NEWS_FEEDS[rubrique] || NEWS_FEEDS.une;
+  const txt = await fetch(url).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+  const xml = new DOMParser().parseFromString(txt, 'text/xml');
+  const strip = h => { const d = document.createElement('div'); d.innerHTML = h || ''; return d.textContent.trim(); };
+  return [...xml.querySelectorAll('item')].slice(0, 6).map(it => {
+    const media = it.getElementsByTagName('media:content')[0] || it.getElementsByTagNameNS('http://search.yahoo.com/mrss/', 'content')[0] || it.querySelector('enclosure');
+    const g = sel => (it.querySelector(sel) || {}).textContent || '';
+    return { titre: strip(g('title')), resume: strip(g('description')).slice(0, 220), lien: g('link'), date: g('pubDate'), image: media ? media.getAttribute('url') : null };
+  });
+}
+function newsHtml(list) {
+  return `<ul class="news">${list.map(n => `<li>${n.image ? `<img src="${esc(n.image)}" alt="" loading="lazy">` : '<span class="noimg"></span>'}<div><b>${esc(n.titre)}</b><span>${esc(n.resume)}</span></div></li>`).join('')}</ul><p class="note">Source : Le Monde</p>`;
+}
+
+/* ---------- Outils que Gemini peut appeler ---------- */
+const r0 = v => v == null ? null : Math.round(v), r1 = v => v == null ? null : Math.round(v * 10) / 10, r2 = v => v == null ? null : Math.round(v * 100) / 100;
+const PAGE_IDS = { conduite: 'drive', nav: 'nav', moteur: 'motor', perf: 'perf', garage: 'garage' };
+function carState() {
+  const s = S(), n = navInfo(), v = musicView();
+  return {
+    source: source === sim ? 'simulation (données de démonstration)' : source instanceof ObdSource ? (source.connected ? 'OBD connecté à ' + source.label : 'OBD déconnecté, reconnexion en cours') : 'aucune (adaptateur OBD non connecté)',
+    vitesse_kmh: r0(s.speed), regime_tr_min: r0(s.rpm), rapport: s.gear, turbo_bar: r2(s.boost), charge_moteur_pct: s.load == null ? null : r0(s.load * 100),
+    eau_c: r0(s.coolant), huile_c: r0(s.oil), batterie_v: r1(s.batt), suie_fap_pct: r0(s.soot), regeneration_fap_en_cours: !!s.regen, conso_l_h: r1(s.lph),
+    temperature_exterieure_c: s.ext != null ? r0(s.ext) : wxNow ? wxNow.temperature : null,
+    mode_dna: { D: 'Dynamic (sport)', N: 'Natural', A: 'All-weather (pluie)' }[dna], page_affichee: page,
+    navigation: n.dist == null ? n.street : { prochaine_manoeuvre: n.street, dans: fmtDist(n.dist), destination: n.label, arrivee: n.eta, restant: fmtDist(n.remain) },
+    musique: { titre: v.title, artiste: v.artist, en_lecture: v.playing },
+    trajet_en_cours: { distance_km: r1(trip.dist), duree_min: r0(trip.t / 60) }
+  };
+}
+const AI_TOOLS = [
+  { name: 'etat_voiture', description: "Données en temps réel : vitesse, régime, rapport, turbo, températures eau/huile/extérieur, batterie, filtre à particules, conso, mode DNA, page affichée, navigation et musique en cours." },
+  { name: 'naviguer', description: 'Lance le guidage GPS vers une adresse, un lieu ou une ville.', parameters: { type: 'object', properties: { destination: { type: 'string', description: 'Adresse ou lieu, aussi précis que possible' } }, required: ['destination'] } },
+  { name: 'annuler_navigation', description: 'Arrête le guidage en cours.' },
+  { name: 'musique', description: 'Contrôle la musique en cours (Spotify, YouTube Music… dans l\'appli).', parameters: { type: 'object', properties: { action: { type: 'string', enum: ['play', 'pause', 'next', 'previous'] } }, required: ['action'] } },
+  { name: 'mode_dna', description: 'Change le mode d\'affichage DNA : D = Dynamic (sport, rouge), N = Natural (normal), A = All-weather (pluie).', parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['D', 'N', 'A'] } }, required: ['mode'] } },
+  { name: 'afficher_page', description: 'Affiche une page de l\'interface.', parameters: { type: 'object', properties: { page: { type: 'string', enum: ['conduite', 'nav', 'moteur', 'perf', 'garage'] } }, required: ['page'] } },
+  { name: 'afficher_fenetre', description: 'Affiche une fenêtre holographique avec un titre et un texte détaillé (paragraphes séparés par des retours à la ligne).', parameters: { type: 'object', properties: { titre: { type: 'string' }, texte: { type: 'string' } }, required: ['titre', 'texte'] } },
+  { name: 'luminosite', description: "Règle la luminosité de l'écran.", parameters: { type: 'object', properties: { mode: { type: 'string', enum: ['auto', 'nuit', 'jour'] } }, required: ['mode'] } },
+  { name: 'entretien', description: "Carnet d'entretien : vidange, courroie, plaquettes, contrôle technique, assurance, avec les échéances." },
+  { name: 'diagnostic', description: 'Lit les codes défaut du calculateur et les affiche.' },
+  { name: 'trajet_et_records', description: 'Trajet en cours (distance, conso, coût, score éco), derniers trajets et records 0-100 / 80-120.' },
+  { name: 'meteo', description: 'Météo actuelle et prévisions (pluie dans les prochaines heures, demain). Sans lieu : position actuelle.', parameters: { type: 'object', properties: { lieu: { type: 'string', description: 'Ville, facultatif' } } } },
+  { name: 'actualites', description: 'Titres de l\'actualité du jour (Le Monde), affichés avec leurs images.', parameters: { type: 'object', properties: { rubrique: { type: 'string', enum: Object.keys(NEWS_FEEDS) } } } },
+  { name: 'recherche_web', description: 'Recherche Google pour une question factuelle récente qui n\'est couverte par aucun autre outil.', parameters: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }
+];
+const AI_IMPL = {
+  etat_voiture: async () => carState(),
+  naviguer: async a => routeTo(a.destination, true),
+  annuler_navigation: async () => { clearRoute(); return { ok: true }; },
+  musique: async a => { musicCmd(a.action); await new Promise(r => setTimeout(r, 900)); const v = musicView(); return { ok: true, titre: v.title, artiste: v.artist, en_lecture: v.playing }; },
+  mode_dna: async a => { setDna(a.mode, true); modeTransition(a.mode); return { ok: true, mode: a.mode }; },
+  afficher_page: async a => { goPage(PAGE_IDS[a.page] || 'drive'); return { ok: true }; },
+  afficher_fenetre: async a => { holo(a.titre || 'Jarvis', String(a.texte || '').split(/\n+/).map(p => `<p>${esc(p)}</p>`).join(''), { kicker: 'Jarvis', ms: 30000 }); return { ok: true }; },
+  luminosite: async a => { nightMode = { auto: 'auto', nuit: 'night', jour: 'day' }[a.mode] || 'auto'; store.set('night', nightMode); applyNight(); return { ok: true }; },
+  entretien: async () => ({ compteur_km: odoNow(), valeurs_exemple: !!garage.example, elements: garage.items.map(it => { const x = itemStatus(it); return { element: it.name, echeance: x.due, etat: x.state }; }) }),
+  diagnostic: async () => runDiag(true),
+  trajet_et_records: async () => ({
+    trajet_en_cours: { distance_km: r1(trip.dist), duree: fmtDur(trip.t), conso_l100: trip.dist > 0.2 ? r1(trip.fuel / trip.dist * 100) : null, cout_eur: r2(trip.fuel * garage.fuel), score_eco: tripScore(trip) },
+    derniers_trajets: history.slice(0, 3).map(h => ({ date: new Date(h.d).toLocaleDateString('fr-FR'), km: r1(h.dist), conso: r1(h.l100), cout_eur: r2(h.cost), score: h.score, exemple: !!h.ex })),
+    record_0_100_s: perf.best['0-100'][0] ? r2(perf.best['0-100'][0].t) : null, record_80_120_s: perf.best['80-120'][0] ? r2(perf.best['80-120'][0].t) : null
+  }),
+  meteo: async a => {
+    let p;
+    if (a.lieu) p = await geocodeCity(a.lieu);
+    else { p = lastPosition(); if (!p) return { ok: false, raison: 'position GPS inconnue' }; }
+    const w = await fetchWeather(p.lat, p.lon, a.lieu ? p.name : null);
+    holo('Météo', weatherCard(w) + `<p class="note">Demain : ${esc(w.demain.ciel)}, ${w.demain.min}° à ${w.demain.max}°, pluie ${w.demain.pluie_pct} %.</p>`, { kicker: 'Météo · Open-Meteo', ms: 20000 });
+    return w;
+  },
+  actualites: async a => {
+    const list = await fetchNews(a.rubrique || 'une');
+    if (!list.length) return { ok: false, raison: 'aucun article' };
+    holo('Actualités', newsHtml(list), { kicker: 'Le Monde · ' + (a.rubrique || 'à la une'), ms: 45000 });
+    return { articles: list.map(n => ({ titre: n.titre, resume: n.resume })) };
+  },
+  recherche_web: async a => {
+    try {
+      const j = await gemini({ contents: [{ role: 'user', parts: [{ text: a.question + "\nRéponds en français, en 3 phrases maximum." }] }], tools: [{ google_search: {} }] });
+      const parts = (j.candidates && j.candidates[0].content && j.candidates[0].content.parts) || [];
+      return { reponse: parts.map(p => p.text || '').join(' ').trim() };
+    } catch (e) {
+      return { ok: false, raison: e.status === 429 ? "la recherche Google n'est pas incluse dans l'offre gratuite de la clé Gemini" : e.message };
+    }
+  }
+};
+
+function aiContext() {
+  const s = S(), n = navInfo(), d = new Date();
+  const src = source === sim ? 'simulation' : source instanceof ObdSource ? (source.connected ? 'OBD connecté' : 'OBD déconnecté') : 'OBD non connecté';
+  return `[Contexte : ${d.toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })}, ${stamp()} · ${src} · vitesse ${s.speed == null ? 'inconnue' : Math.round(s.speed) + ' km/h'} · mode DNA ${dna} · page ${page} · ${n.dist == null ? 'pas de navigation' : 'navigation vers ' + n.label}]`;
+}
+async function askAI(q) {
+  const contents = [...AI.hist, { role: 'user', parts: [{ text: `${aiContext()}\n${q}` }] }];
+  for (let round = 0; round < 5; round++) {
+    const j = await gemini({ systemInstruction: { parts: [{ text: JARVIS_SYSTEM }] }, contents, tools: [{ functionDeclarations: AI_TOOLS }], generationConfig: { maxOutputTokens: 700, temperature: 0.7 } });
+    const cand = j.candidates && j.candidates[0], content = cand && cand.content;
+    if (!content || !content.parts) throw new Error(cand && cand.finishReason ? 'réponse bloquée (' + cand.finishReason + ')' : 'réponse vide');
+    contents.push(content);
+    const calls = content.parts.filter(p => p.functionCall);
+    const text = content.parts.filter(p => p.text && !p.thought).map(p => p.text).join(' ').replace(/[*#_`]/g, '').trim();
+    if (!calls.length) {
+      AI.hist.push({ role: 'user', parts: [{ text: q }] }, { role: 'model', parts: [{ text: text || '…' }] });
+      AI.hist = AI.hist.slice(-12);
+      return text || 'C\'est fait, monsieur.';
+    }
+    const responses = await Promise.all(calls.map(async p => {
+      const { name, args, id } = p.functionCall;
+      let res;
+      try { res = AI_IMPL[name] ? await AI_IMPL[name](args || {}) : { ok: false, raison: 'outil inconnu' }; }
+      catch (e) { res = { ok: false, raison: e.message || String(e) }; }
+      if (res == null || typeof res !== 'object' || Array.isArray(res)) res = { resultat: res };
+      const fr_ = { name, response: res }; if (id) fr_.id = id;
+      return { functionResponse: fr_ };
+    }));
+    contents.push({ role: 'user', parts: responses });
+  }
+  return "J'ai fait ce que j'ai pu, monsieur.";
+}
+
+/* ---------- Réglages ---------- */
+function openSettings(msg) {
+  holo('Réglages', `<div class="set">
+    <label>Clé API Gemini<input class="in" id="sKey" type="password" autocomplete="off" spellcheck="false" placeholder="Collez votre clé ici"></label>
+    <label>Cerveau<select class="in" id="sModel">
+      <option value="gemini-3.1-flash-lite">Rapide · Gemini 3.1 Flash-Lite (≈ 1 s)</option>
+      <option value="gemini-3.5-flash">Plus intelligent · Gemini 3.5 Flash (≈ 3 s)</option></select></label>
+    <label class="chk"><input type="checkbox" id="sBrief"> Briefing au démarrage</label>
+    <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis</label>
+    <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
+    <p class="note" id="sMsg">${esc(msg || '')}</p>
+    <p class="note">La clé reste sur cet appareil et n'est envoyée qu'à Google. Sans clé, Jarvis répond avec ses réponses intégrées.</p></div>`, { kicker: 'Jarvis', ms: 0 });
+  $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
+  const save = () => {
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked };
+    store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
+  };
+  $('sSave').addEventListener('click', () => { save(); $('sMsg').textContent = AI.cfg.key ? 'Enregistré. Jarvis utilise Gemini.' : 'Enregistré. Pas de clé : réponses intégrées.'; });
+  $('sTest').addEventListener('click', async () => {
+    save(); if (!AI.cfg.key) { $('sMsg').textContent = 'Collez d\'abord une clé.'; return; }
+    $('sMsg').textContent = 'Test en cours…';
+    try {
+      const j = await gemini({ contents: [{ role: 'user', parts: [{ text: 'Réponds seulement : opérationnel.' }] }], generationConfig: { maxOutputTokens: 20 } });
+      $('sMsg').textContent = `Connexion réussie (${j.modelVersion || AI.cfg.model}).`;
+    } catch (e) { $('sMsg').textContent = 'Échec : ' + e.message; }
+  });
+  $('sBriefNow').addEventListener('click', () => { save(); runBriefing(true); });
+}
+$('setBtn').addEventListener('click', () => openSettings());
+
+/* ---------- Briefing de démarrage ---------- */
+async function runBriefing(force) {
+  const s = S(), u = mostUrgent();
+  if (!AI.cfg.briefing && !force) {
+    say(`${greeting()}. ${s.oil == null ? '' : s.oil < 80 ? 'Moteur froid, je surveille l\'huile. ' : ''}${u && u.s.state !== 'ok' ? 'Petit rappel : ' + u.it.name.toLowerCase() + ' ' + u.s.due + '.' : ''}`.trim());
+    return;
+  }
+  core.classList.add('think');
+  const pos = await waitPosition(7000);
+  let w = null; if (pos) { try { w = await fetchWeather(pos.lat, pos.lon); } catch (e) {} }
+  const maint = garage.items.map(it => ({ it, s: itemStatus(it) })).filter(x => x.s.state !== 'ok');
+  const last = history[0];
+  const facts = {
+    date: new Date().toLocaleDateString('fr-FR', { weekday: 'long', day: 'numeric', month: 'long' }), heure: stamp(),
+    meteo: w ? { temperature: w.temperature, ciel: w.ciel, pluie_probable_3h_pct: w.pluie_probable_3h_pct, pluie_prevue_vers: w.pluie_prevue_vers, min: w.min, max: w.max } : 'indisponible',
+    mode_dna_actuel: dna, voiture: carState(),
+    entretien_a_prevoir: maint.length ? maint.map(x => `${x.it.name} ${x.s.due}`) : 'rien de proche',
+    dernier_trajet: last ? `${r1(last.dist)} km, ${r1(last.l100)} L/100, score ${last.score}${last.ex ? ' (exemple)' : ''}` : null
+  };
+  const cards = [];
+  if (w) cards.push(weatherCard(w));
+  cards.push(`<div class="hgrid">
+    <div><span class="label">Voiture</span><b>${esc(source === sim ? 'Démo' : source instanceof ObdSource && source.connected ? 'OBD connecté' : 'OBD en attente')}</b></div>
+    <div data-state="${st.dpf(s.soot, s.regen)[0]}"><span class="label">FAP</span><b style="color:var(--st)">${fr(s.soot)} %</b></div>
+    <div data-state="${u ? u.s.state : 'ok'}"><span class="label">${esc(u ? u.it.name : 'Entretien')}</span><b style="color:var(--st);font-size:17px">${esc(u ? u.s.due : 'à jour')}</b></div>
+    <div><span class="label">Dernier trajet</span><b style="font-size:17px">${last ? fr(last.dist, 1) + ' km · ' + fr(last.l100, 1) + ' L/100' : '—'}</b></div></div>`);
+  holo('Briefing', cards.join(''), { kicker: facts.date + ' · ' + facts.heure, ms: 25000 });
+  let text = null;
+  if (AI.cfg.key) {
+    try {
+      const j = await gemini({ systemInstruction: { parts: [{ text: JARVIS_SYSTEM }] }, contents: [{ role: 'user', parts: [{ text:
+        "Fais le briefing de démarrage, à l'oral, en deux à quatre phrases courtes : salutation selon l'heure, météo et pluie à venir, un rappel d'entretien seulement s'il y en a un, l'état de la voiture seulement s'il y a quelque chose à signaler, et propose le mode A (pluie) si de la pluie est prévue et que ce mode n'est pas déjà actif. Données : " + JSON.stringify(facts) }] }], generationConfig: { maxOutputTokens: 300, temperature: 0.8 } });
+      text = ((j.candidates && j.candidates[0].content && j.candidates[0].content.parts) || []).map(p => p.thought ? '' : p.text || '').join(' ').replace(/[*#_`]/g, '').trim();
+    } catch (e) { text = null; }
+  }
+  if (!text) {
+    text = `${greeting()}.` + (w ? ` Il fait ${w.temperature} degrés, ${w.ciel}${w.pluie_prevue_vers ? ', pluie probable vers ' + w.pluie_prevue_vers : ''}.` : '')
+      + (maint.length ? ` Petit rappel : ${maint[0].it.name.toLowerCase()} ${maint[0].s.due}.` : '')
+      + (rainy(w) && dna !== 'A' ? ' Je vous suggère le mode A.' : '');
+  }
+  core.classList.remove('think');
+  say(text);
+  if (!AI.cfg.key && !AI.keyHintSaid) { AI.keyHintSaid = true; setTimeout(() => say("Pour me donner un vrai cerveau, collez votre clé Gemini dans les réglages : l'engrenage en haut à droite."), 2500); }
+}
+
+function ask(q) {
+  q = q.trim(); if (!q) return; addMsg(q, true);
+  if (!AI.cfg.key) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 350); return; }
+  // questions posées à la suite : traitées dans l'ordre
+  AI.chain = AI.chain.then(() => {
+    core.classList.add('think');
+    return askAI(q).then(t => { say(t); AI.offlineSaid = false; }).catch(e => {
+      console.warn('Gemini :', e);
+      const a = answer(q);
+      if (!AI.offlineSaid) { AI.offlineSaid = true; say('Mon cerveau en ligne ne répond pas (' + (e.message || 'erreur') + '). Je passe en réponses simplifiées.'); }
+      if (a) say(a);
+    }).finally(() => core.classList.remove('think'));
+  });
+}
 $('ask').addEventListener('submit', e => { e.preventDefault(); ask($('q').value); $('q').value = ''; });
 document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => ask(b.dataset.q)));
-$('voice').addEventListener('click', e => {
-  voiceOn = !voiceOn; e.currentTarget.setAttribute('aria-pressed', voiceOn);
-  e.currentTarget.textContent = voiceOn ? 'Voix · on' : 'Voix';
-  if (voiceOn) speak('Voix activée.'); else try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (_) {}
-});
+function setVoice(on, announce) {
+  voiceOn = !!on; store.set('voice', voiceOn);
+  $('voice').setAttribute('aria-pressed', voiceOn); $('voice').textContent = voiceOn ? 'Voix · on' : 'Voix';
+  if (voiceOn) { if (announce) speak('Voix activée.'); } else try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (_) {}
+}
+setVoice(voiceOn);
+$('voice').addEventListener('click', () => setVoice(!voiceOn, true));
 $('fs').addEventListener('click', async () => {
   try { document.fullscreenElement ? await document.exitFullscreen() : await document.documentElement.requestFullscreen(); } catch (e) {}
   try { await navigator.wakeLock?.request('screen'); } catch (e) {}
@@ -2104,7 +2437,12 @@ function frame(now) {
   requestAnimationFrame(frame);
 }
 
-function clock() { $('time').textContent = stamp(); }
+function clock() {
+  $('time').textContent = stamp();
+  const t = S().ext != null ? S().ext : wxNow ? wxNow.temperature : null;
+  $('ext').textContent = t == null ? '--' : fr(t);
+}
+setInterval(() => { const p = lastPosition(); if (HOSTED && p && (!wxNow || Date.now() - wxNow.at > 20 * 60000)) fetchWeather(p.lat, p.lon).catch(() => {}); }, 60000);
 clock(); setInterval(clock, 1000);
 setInterval(applyNight, 60000);
 setDna(dna, true); applyNight();
@@ -2117,9 +2455,6 @@ if (HOSTED) {
   document.addEventListener('visibilitychange', () => { if (!document.hidden) wake(); });
 }
 requestAnimationFrame(frame);
-bootSequence(() => {
-  const s = S(), u = mostUrgent();
-  say(`${greeting()}. Il fait ${fr(s.ext)} °C. ${s.oil == null ? '' : s.oil < 80 ? 'Moteur froid, je surveille l\'huile.' : 'Moteur chaud.'} ${u && u.s.state !== 'ok' ? 'Petit rappel : ' + u.it.name.toLowerCase() + ' ' + u.s.due + '.' : ''}`.trim());
-});
+bootSequence(() => { runBriefing(false); });
 })();
 </script>

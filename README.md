@@ -18,6 +18,8 @@ Deux façons de l'utiliser :
 - **Appareils à proximité** : acceptez (Bluetooth OBD).
 - **OBD** : contact mis, touchez **Connecter OBD** et choisissez l'OBDLink CX. C'est la seule fois : ensuite Jarvis s'y reconnecte tout seul dès que vous mettez le contact.
 - **Musique** : touchez le titre dans le lecteur (« Accès à la musique »). Android ouvre la page « Accès aux notifications » : activez **Jarvis**. Jarvis affiche alors le titre, l'artiste et la pochette de Spotify, YouTube Music, Deezer… et les boutons pilotent le lecteur. Jarvis ne lit aucune notification.
+- **Cerveau Gemini** : touchez l'engrenage en haut à droite, collez votre clé API Gemini (https://aistudio.google.com/apikey), puis **Tester** et **Enregistrer**. La clé reste sur la tablette, elle n'est jamais dans ce dépôt. Jarvis comprend alors n'importe quelle question et agit : itinéraire, musique, mode DNA, pages, météo, actualités, diagnostic, entretien. Sans clé, il garde ses réponses intégrées.
+- **Briefing au démarrage** : météo de votre position (Open-Meteo), pluie à venir, rappels d'entretien, état de la voiture, rédigé par Gemini et lu à voix haute si la voix est activée. Se désactive dans les réglages.
 - **Voix** : bouton Voix dans la console. Elle utilise la synthèse vocale d'Android (voix française à installer dans Paramètres → Synthèse vocale si besoin).
 
 L'APK est fabriqué automatiquement par GitHub Actions à chaque modification (onglet **Actions** du dépôt).
@@ -61,6 +63,9 @@ Tous gratuits pour un usage personnel :
 - Carte : tuiles © contributeurs OpenStreetMap
 - Recherche d'adresses : Nominatim (OpenStreetMap)
 - Itinéraires : serveur public OSRM
+- Météo : Open-Meteo (sans clé)
+- Actualités : flux RSS du Monde (dans l'appli Android)
+- Intelligence : API Gemini de Google (votre clé)
 - Carte affichée avec Leaflet (inclus dans `lib/`)
 
 Sans réseau, le tableau de bord marche normalement. La carte affiche les zones déjà vues, mais la recherche d'itinéraire a besoin d'Internet.

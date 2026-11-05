@@ -13,6 +13,9 @@
         "availableDevices": "Appareils Bluetooth",
         "noDeviceFound": "Aucun adaptateur trouvé"
       }
+    },
+    "CapacitorHttp": {
+      "enabled": true
     }
   }
 }
