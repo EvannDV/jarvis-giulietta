@@ -323,14 +323,19 @@ button{cursor:pointer}
 #map{position:absolute;inset:0;width:100%;height:100%;display:block}
 /* Vraie carte (version installée) : tournée dans le sens de la marche */
 #realWrap{position:absolute;inset:0;overflow:hidden;background:var(--panel-2)}
-#realMap{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(var(--rot,0deg));transition:transform .9s linear;background:var(--panel-2)}
-#realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.7) contrast(1.2) sepia(1) hue-rotate(155deg) saturate(2.6)}
-:root[data-dna="N"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.45) contrast(1.15) sepia(.45) saturate(.9)}
-:root[data-dna="D"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.6) contrast(1.25) sepia(1) hue-rotate(-35deg) saturate(3.4)}
-:root[data-dna="A"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.75) contrast(1.15) sepia(1) hue-rotate(178deg) saturate(1.9)}
+/* Carte 3D (MapLibre + OpenFreeMap) : vrais bâtiments OpenStreetMap en relief, couleurs du mode DNA */
+#realMap{position:absolute;inset:0;background:var(--panel-2)}
+#realMap .maplibregl-canvas{outline:none}
+#realWrap::after{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(180deg,rgba(var(--bg-rgb),.55) 0%,rgba(var(--bg-rgb),0) 22%),radial-gradient(ellipse 80% 70% at 50% 65%,transparent 55%,rgba(0,0,0,.45) 100%)}
+.turn3d{display:flex;flex-direction:column;align-items:center;gap:2px;pointer-events:none;filter:drop-shadow(0 0 12px var(--acc))}
+.turn3d b{font:600 20px/1 var(--f-display);color:#fff;text-shadow:0 0 10px var(--acc),0 2px 4px #000;white-space:nowrap}
+.turn3d svg{width:58px;height:58px;color:var(--acc)}
+.turn3d i{width:2px;height:46px;background:linear-gradient(var(--acc),transparent)}
+.dest-beam{width:8px;height:180px;background:linear-gradient(0deg,var(--acc),rgba(var(--acc-rgb),0));border-radius:4px;box-shadow:0 0 18px var(--acc);pointer-events:none}
+.via-pin{width:16px;height:16px;border-radius:50%;border:3px solid var(--acc);background:var(--bg);box-shadow:0 0 12px var(--acc)}
 .route-line{filter:drop-shadow(0 0 6px var(--acc))}
-.car-ico{position:absolute;left:50%;top:50%;width:34px;height:34px;transform:translate(-50%,-50%);color:var(--text);filter:drop-shadow(0 0 10px var(--acc));pointer-events:none}
-.attrib{position:absolute;left:12px;bottom:58px;font-family:var(--f-mono);font-size:9px;color:var(--muted);background:rgba(var(--bg-rgb),.6);padding:1px 4px}
+.car-ico{position:absolute;left:50%;top:68%;width:40px;height:40px;z-index:1;transform:translate(-50%,-50%);color:var(--text);filter:drop-shadow(0 0 10px var(--acc));pointer-events:none}
+.attrib{position:absolute;left:12px;bottom:58px;max-width:calc(100% - 24px);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;z-index:1;font-family:var(--f-mono);font-size:9px;color:var(--muted);background:rgba(var(--bg-rgb),.6);padding:1px 4px}
 .map-msg{position:absolute;left:50%;top:55%;transform:translate(-50%,-50%);width:min(86%,340px);text-align:center;color:var(--text);font-family:var(--f-mono);font-size:12px;letter-spacing:.1em;text-transform:uppercase;background:rgba(var(--bg-rgb),.85);border:1px solid var(--line-hi);padding:10px 12px;cursor:pointer}
 .map-msg small{display:block;margin-top:6px;color:var(--muted);text-transform:none;letter-spacing:0;font-family:var(--f-body);font-size:13px}
 .turn{position:absolute;top:10px;left:10px;right:10px;display:flex;align-items:center;gap:12px;padding:10px 12px;background:rgba(var(--bg-rgb),.82);border:1px solid var(--line-hi)}
@@ -788,7 +793,7 @@ button{cursor:pointer}
         <div id="realWrap" hidden><div id="realMap"></div>
           <svg class="car-ico" viewBox="0 0 34 34" aria-hidden="true"><path d="M17 3l11 26-11-6-11 6z" fill="currentColor"/></svg>
           <span class="map-msg" id="mapMsg">Recherche du signal GPS…</span>
-          <span class="attrib">© contributeurs OpenStreetMap · OSRM</span>
+          <span class="attrib">© OpenFreeMap · OpenMapTiles · contributeurs OpenStreetMap · OSRM</span>
         </div>
         <div class="turn">
           <svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"><path id="turnIco" d="M14 36V18h14M22 11l7 7-7 7"/></svg>
@@ -1336,10 +1341,10 @@ function setDna(m, quiet) {
   document.querySelectorAll('.dna button').forEach(b => b.setAttribute('aria-pressed', b.dataset.dna === m));
   $('modeTag').textContent = DNA_INFO[m].tag;
   $('stat3l').textContent = m === 'D' ? 'Pic turbo' : m === 'A' ? 'Dist. sécu.' : 'Charge';
-  refreshTokens();
+  refreshTokens(); if (typeof restyleMap === 'function') restyleMap();
   fx.setMode(m);
   if (!quiet) modeTransition(m);
-  if (!quiet) say(pick(DNA_INFO[m].say) + (m === 'A' && S().ext <= 3 ? ' Il fait ' + fr(S().ext) + ' °C, risque de verglas.' : ''));
+  if (!quiet) say(pick(DNA_INFO[m].say) + (m === 'A' && S().ext != null && S().ext <= 3 ? ' Il fait ' + fr(S().ext) + ' °C, risque de verglas.' : ''));
 }
 document.querySelectorAll('.dna button').forEach(b => b.addEventListener('click', () => { if (b.dataset.dna !== dna) setDna(b.dataset.dna); }));
 
@@ -1780,27 +1785,111 @@ function stepIcon(st) {
   if (m.type === 'roundabout' || m.type === 'rotary') return 'round';
   return mod === 'uturn' ? 'uturn' : mod.includes('left') ? 'left' : mod.includes('right') ? 'right' : 'straight';
 }
-function loadLeaflet() {
-  if (window.L) return Promise.resolve();
+function loadMapLib() {
+  if (window.maplibregl) return Promise.resolve();
   return new Promise((res, rej) => {
-    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'lib/leaflet.css'; document.head.append(l);
-    const sc = document.createElement('script'); sc.src = 'lib/leaflet.js'; sc.onload = res; sc.onerror = rej; document.head.append(sc);
+    const l = document.createElement('link'); l.rel = 'stylesheet'; l.href = 'lib/maplibre-gl.css'; document.head.append(l);
+    const sc = document.createElement('script'); sc.src = 'lib/maplibre-gl.js'; sc.onload = res; sc.onerror = rej; document.head.append(sc);
   });
 }
+const map3d = () => AI.cfg.map3d !== false;
 function sizeRealMap() {
-  const w = $('realWrap'), d = Math.ceil(Math.hypot(w.clientWidth, w.clientHeight)) + 4, m = $('realMap');
-  m.style.width = m.style.height = d + 'px'; if (nav.map) nav.map.invalidateSize(false);
+  if (!nav.map) return;
+  nav.map.resize();
+  nav.map.setPadding({ top: Math.round($('realWrap').clientHeight * 0.36), bottom: 0, left: 0, right: 0 }); // la voiture en bas de l'écran, la route devant
 }
+// Couleurs de la carte tirées du mode DNA (N champagne, D rouge, A bleu acier)
+const rgbMix = (a, b, f) => { const x = a.split(',').map(Number), y = b.split(',').map(Number); return `rgb(${x.map((v, i) => Math.round(v + (y[i] - v) * f)).join(',')})`; };
+function mapColors() {
+  const A = T['--acc-rgb'], cs = getComputedStyle(document.documentElement), P = cs.getPropertyValue('--panel-rgb').trim() || '12,12,14';
+  return { A, P, bg: rgbMix(P, '0,0,0', 0.45), water: `rgba(${A},.13)`, park: `rgba(${A},.045)`, road: `rgba(${A},.32)`, major: `rgba(${A},.6)`,
+    b0: rgbMix(P, '0,0,0', 0.25), b1: rgbMix(P, A, 0.5), edge: `rgba(${A},.75)`, label: T['--text'], halo: rgbMix(P, '0,0,0', 0.4) };
+}
+function mapStyle() {
+  const c = mapColors(), roadW = (a, b) => ['interpolate', ['exponential', 1.5], ['zoom'], 12, a, 18, b];
+  const roads = ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], true, false];
+  return {
+    version: 8, glyphs: 'https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf',
+    sources: {
+      omt: { type: 'vector', url: 'https://tiles.openfreemap.org/planet' },
+      alts: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } },
+      route: { type: 'geojson', data: { type: 'FeatureCollection', features: [] } }
+    },
+    layers: [
+      { id: 'bg', type: 'background', paint: { 'background-color': c.bg } },
+      { id: 'park', type: 'fill', source: 'omt', 'source-layer': 'park', paint: { 'fill-color': c.park } },
+      { id: 'water', type: 'fill', source: 'omt', 'source-layer': 'water', paint: { 'fill-color': c.water } },
+      { id: 'rail', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ['==', ['get', 'class'], 'rail'], paint: { 'line-color': c.road, 'line-width': 1, 'line-dasharray': [3, 3] } },
+      { id: 'roads', type: 'line', source: 'omt', 'source-layer': 'transportation', filter: ['match', ['get', 'class'], ['rail', 'transit', 'ferry', 'path', 'track'], false, true],
+        layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': ['case', roads, c.major, c.road], 'line-width': ['interpolate', ['exponential', 1.5], ['zoom'], 12, ['case', roads, 1.5, 0.6], 18, ['case', roads, 26, 14]] } },
+      { id: 'bfoot', type: 'line', source: 'omt', 'source-layer': 'building', minzoom: 14, paint: { 'line-color': c.edge, 'line-width': 1 } },
+      { id: 'alts', type: 'line', source: 'alts', layout: { 'line-cap': 'round' }, paint: { 'line-color': T['--acc-dim'], 'line-width': 5, 'line-opacity': 0.55, 'line-dasharray': [2, 2] } },
+      { id: 'route-glow', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': T['--acc'], 'line-width': roadW(14, 56), 'line-blur': 12, 'line-opacity': 0.55 } },
+      { id: 'route', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': T['--acc'], 'line-width': roadW(5, 22) } },
+      { id: 'route-core', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': '#ffffff', 'line-width': roadW(1, 4), 'line-opacity': 0.9 } },
+      { id: 'b3d', type: 'fill-extrusion', source: 'omt', 'source-layer': 'building', minzoom: 14, filter: ['!', ['has', 'hide_3d']],
+        paint: { 'fill-extrusion-color': ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 6], 0, c.b0, 40, c.b1], 'fill-extrusion-height': ['coalesce', ['get', 'render_height'], 6],
+          'fill-extrusion-base': ['coalesce', ['get', 'render_min_height'], 0], 'fill-extrusion-opacity': 0.92, 'fill-extrusion-vertical-gradient': true } },
+      // l'itinéraire reste visible à travers les immeubles, en pointillés (vision « rayons X »)
+      { id: 'route-xray', type: 'line', source: 'route', layout: { 'line-cap': 'round', 'line-join': 'round' }, paint: { 'line-color': T['--acc'], 'line-width': roadW(2.5, 7), 'line-opacity': 0.6, 'line-dasharray': [1.5, 1.5] } },
+      { id: 'names', type: 'symbol', source: 'omt', 'source-layer': 'transportation_name', minzoom: 14,
+        layout: { 'symbol-placement': 'line', 'text-field': ['coalesce', ['get', 'name:fr'], ['get', 'name']], 'text-font': ['Noto Sans Regular'], 'text-size': 12, 'text-letter-spacing': 0.05 },
+        paint: { 'text-color': c.label, 'text-halo-color': c.halo, 'text-halo-width': 1.5, 'text-opacity': 0.8 } }
+    ]
+  };
+}
+function restyleMap() { // changement de mode DNA : on recolore sans recharger la carte
+  const m = nav.map; if (!m || !m.getLayer('bg')) return;
+  const c = mapColors(), set = (l, k, v) => { try { m.setPaintProperty(l, k, v); } catch (e) {} };
+  set('bg', 'background-color', c.bg); set('park', 'fill-color', c.park); set('water', 'fill-color', c.water); set('rail', 'line-color', c.road);
+  set('roads', 'line-color', ['case', ['match', ['get', 'class'], ['motorway', 'trunk', 'primary'], true, false], c.major, c.road]);
+  set('bfoot', 'line-color', c.edge); set('alts', 'line-color', T['--acc-dim']);
+  ['route-glow', 'route', 'route-xray'].forEach(l => set(l, 'line-color', T['--acc']));
+  set('b3d', 'fill-extrusion-color', ['interpolate', ['linear'], ['coalesce', ['get', 'render_height'], 6], 0, c.b0, 40, c.b1]);
+  set('names', 'text-color', c.label); set('names', 'text-halo-color', c.halo);
+}
+function apply3d() {
+  if (!nav.map) return;
+  const on = map3d(); try { nav.map.setLayoutProperty('b3d', 'visibility', on ? 'visible' : 'none'); } catch (e) {}
+  nav.map.easeTo({ pitch: on ? 62 : 0, duration: 600 });
+}
+const hasWebGL = () => { try { const c = document.createElement('canvas'); return !!(c.getContext('webgl2') || c.getContext('webgl')); } catch (e) { return false; } };
 async function initRealMap() {
-  try { await loadLeaflet(); } catch (e) { say("Impossible de charger la carte. Je garde la carte de démonstration."); return; }
+  if (!hasWebGL()) { say("Cette tablette ne gère pas la carte 3D. Je garde la carte de démonstration."); return; }
+  try { await loadMapLib(); } catch (e) { say("Impossible de charger la carte. Je garde la carte de démonstration."); return; }
   $('map').hidden = true; $('realWrap').hidden = false;
-  nav.map = L.map('realMap', { zoomControl: false, attributionControl: false, dragging: false, scrollWheelZoom: false, doubleClickZoom: false, touchZoom: false, boxZoom: false, keyboard: false }).setView([46.6, 2.4], 6);
-  L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19 }).addTo(nav.map);
-  nav.layer = L.layerGroup().addTo(nav.map);
+  const last = store.get('lastPos', null);
+  nav.map = new maplibregl.Map({ container: 'realMap', style: mapStyle(), center: last ? [last.lon, last.lat] : [2.4, 46.6], zoom: last ? 16 : 5,
+    pitch: map3d() ? 62 : 0, maxPitch: 70, interactive: false, attributionControl: false, fadeDuration: 0 });
+  nav.map.on('load', () => { restyleMap(); apply3d(); drawRoute(); });
+  nav.markers = { route: [], poi: [], turn: null }; window.JARVIS_MAP = nav.map; // pour le diagnostic
   sizeRealMap(); addEventListener('resize', sizeRealMap);
   if (!navigator.geolocation) { nav.err = 'Pas de GPS sur cet appareil'; $('mapMsg').textContent = nav.err; return; }
   $('mapMsg').addEventListener('click', startGeo);
   startGeo();
+}
+const mkMarker = (el, ll, anchor) => new maplibregl.Marker({ element: el, anchor: anchor || 'center', pitchAlignment: 'viewport', rotationAlignment: 'viewport' }).setLngLat(ll).addTo(nav.map);
+function drawRoute() { // itinéraire, alternatives, étape, arrivée
+  const m = nav.map; if (!m) return;
+  if (!m.getSource('route')) { if (!nav.pendingRoute) { nav.pendingRoute = true; m.once('styledata', () => { nav.pendingRoute = false; drawRoute(); }); } return; }
+  const line = coords => ({ type: 'Feature', geometry: { type: 'LineString', coordinates: coords }, properties: {} });
+  m.getSource('route').setData({ type: 'FeatureCollection', features: nav.route ? [line(nav.route.geometry.coordinates)] : [] });
+  m.getSource('alts').setData({ type: 'FeatureCollection', features: (nav.altRoutes || []).filter((r, i) => i !== nav.altIdx).map(r => line(r.geometry.coordinates)) });
+  nav.markers.route.forEach(x => x.remove()); nav.markers.route = [];
+  if (nav.route && nav.dest) { const b = document.createElement('div'); b.className = 'dest-beam'; nav.markers.route.push(mkMarker(b, [nav.dest.lon, nav.dest.lat], 'bottom')); }
+  if (nav.route && nav.opts.via) { const v = document.createElement('div'); v.className = 'via-pin'; nav.markers.route.push(mkMarker(v, [nav.opts.via.lon, nav.opts.via.lat])); }
+  if (!nav.route && nav.markers.turn) { nav.markers.turn.remove(); nav.markers.turn = null; }
+}
+const TURN_SVG = { right: 'M14 36V18h14M22 11l7 7-7 7', left: 'M26 36V18H12M18 11l-7 7 7 7', straight: 'M20 36V8M13 15l7-7 7 7', uturn: 'M14 36V16a6 6 0 0 1 12 0v6M21 17l5 6 5-6', round: 'M20 36v-8M20 28a8 8 0 1 1 8-8M28 12v8h-8', flag: 'M12 36V6h16l-4 7 4 7H12' };
+function updTurn3d(n) { // flèche géante qui flotte au-dessus du prochain virage
+  if (!nav.map || !nav.route) return;
+  const st = nav.steps[nav.next];
+  if (!st || n.dist == null || n.dist > 350) { if (nav.markers.turn) { nav.markers.turn.remove(); nav.markers.turn = null; } return; }
+  if (!nav.markers.turn) { const el = document.createElement('div'); el.className = 'turn3d'; el.innerHTML = '<b></b><svg viewBox="0 0 40 40" fill="none" stroke="currentColor" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"><path/></svg><i></i>'; nav.markers.turn = mkMarker(el, st.maneuver.location, 'bottom'); }
+  const el = nav.markers.turn.getElement();
+  nav.markers.turn.setLngLat(st.maneuver.location);
+  el.querySelector('b').textContent = fmtDist(n.dist);
+  el.querySelector('path').setAttribute('d', TURN_SVG[stepIcon(st)] || TURN_SVG.straight);
 }
 function startGeo() {
   if (nav.watch != null) navigator.geolocation.clearWatch(nav.watch);
@@ -1825,10 +1914,9 @@ function onFix(p) {
   let h = c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5 ? c.heading : null;
   if (h == null && prev && distM(prev, nav.gps) > 5) h = bearing(prev, nav.gps);
   if (h != null) nav.heading = h;
-  let d = -nav.heading - nav.rot; d = ((d + 540) % 360) - 180; nav.rot += d; // rotation par le plus court chemin
-  $('realMap').style.setProperty('--rot', nav.rot.toFixed(1) + 'deg');
-  const kmh = (c.speed || 0) * 3.6, z = kmh < 30 ? 17 : kmh < 70 ? 16 : kmh < 110 ? 15 : 14;
-  nav.map.setView([nav.gps.lat, nav.gps.lon], z, { animate: true, duration: 0.9 });
+  // caméra derrière la voiture, dans le sens de la marche ; plus on roule vite, plus on voit loin
+  const kmh = (c.speed || 0) * 3.6, z = kmh < 30 ? 17.2 : kmh < 70 ? 16.6 : kmh < 110 ? 15.8 : 15;
+  nav.map.easeTo({ center: [nav.gps.lon, nav.gps.lat], zoom: z, bearing: nav.heading, pitch: map3d() ? 62 : 0, duration: 950, easing: t => t });
   progressRoute();
 }
 // quiet = appel par l'IA : pas de message, on renvoie le résultat
@@ -1919,20 +2007,14 @@ async function computeRoute(announce) {
   nav.alts = routes.map(routeSummary); nav.altIdx = idx;
   nav.route = rt; nav.steps = flattenSteps(rt); nav.next = 1; nav.off = 0; nav.said = -1;
   nav.line = rt.geometry.coordinates.map(([lo, la]) => [la, lo]);
-  if (nav.layer) {
-    nav.layer.clearLayers();
-    routes.forEach((r, i) => { if (i !== idx) L.polyline(r.geometry.coordinates.map(([lo, la]) => [la, lo]), { color: T['--acc-dim'], weight: 5, opacity: .55, dashArray: '8 10' }).addTo(nav.layer); });
-    L.polyline(nav.line, { color: T['--acc'], weight: 7, opacity: .95, className: 'route-line' }).addTo(nav.layer);
-    if (o.via) L.circleMarker([o.via.lat, o.via.lon], { radius: 7, color: T['--acc'], fillColor: T['--bg'] || '#000', fillOpacity: 1, weight: 3 }).addTo(nav.layer);
-    L.circleMarker([d.lat, d.lon], { radius: 9, color: T['--amber'], fillColor: T['--amber'], fillOpacity: 1 }).addTo(nav.layer);
-  }
+  nav.altRoutes = routes; drawRoute();
   const n = realNavInfo();
   if (announce) say(`Itinéraire vers ${d.name} : ${fmtDist(rt.distance)}, environ ${fmtDur(rt.duration)}. Arrivée prévue à ${n.eta}.`);
   const res = { ok: true, destination: d.name, adresse: d.adresse, arrivee: n.eta, premiere_consigne: n.street, itineraire: pubSummary(nav.alts[idx]), options: describeOpts(), nombre_itineraires_possibles: routes.length, trafic: 'non pris en compte (pas de données en temps réel)' };
   if (lost) res.attention = lost;
   return res;
 }
-function clearRoute() { nav.route = null; nav.dest = null; nav.steps = []; if (nav.layer) nav.layer.clearLayers(); }
+function clearRoute() { nav.route = null; nav.dest = null; nav.steps = []; nav.altRoutes = []; drawRoute(); }
 function progressRoute() {
   if (!nav.route || !nav.gps) return;
   const st = nav.steps[nav.next];
@@ -3009,6 +3091,7 @@ function openSettings(msg) {
     <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
     <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
     <label class="chk"><input type="checkbox" id="sSounds"> Sons du mode Sport (coup de gaz à l'activation)</label>
+    <label class="chk"><input type="checkbox" id="sMap3d"> Carte en 3D (bâtiments en relief ; décochez si la tablette rame)</label>
     <label class="chk"><input type="checkbox" id="sFlash"> Flash info : annoncer les alertes et directs importants (franceinfo, toutes les 10 min)</label>
     <label class="chk"><input type="checkbox" id="sBreaks"> Copilote : me proposer une pause (après 2 h de route, 1 h la nuit)</label>
     <label class="chk"><input type="checkbox" id="sMsg2"> Lire mes messages à voix haute (WhatsApp, SMS…)</label>
@@ -3029,9 +3112,10 @@ function openSettings(msg) {
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
-  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sFlash').checked = !!AI.cfg.flash; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sFlash').checked = !!AI.cfg.flash; $('sMap3d').checked = AI.cfg.map3d !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked, flash: $('sFlash').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked, flash: $('sFlash').checked, map3d: $('sMap3d').checked };
+    apply3d();
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
     if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
     configureMessages();
@@ -3478,7 +3562,12 @@ const POI_TYPES = {
   toilettes: '["amenity"="toilets"]', aire_autoroute: '["highway"~"^(rest_area|services)$"]', garage: '["shop"~"^(car_repair|car)$"]',
   pharmacie: '["amenity"="pharmacy"]', hotel: '["tourism"="hotel"]', distributeur: '["amenity"="atm"]', hopital: '["amenity"="hospital"]', lavage: '["amenity"="car_wash"]'
 };
-let poiList = [], poiLayer = null;
+let poiList = [];
+function showPois(html) { // épingles numérotées, debout dans la vue 3D
+  if (!nav.map || !window.maplibregl) return;
+  nav.markers.poi.forEach(x => x.remove());
+  nav.markers.poi = poiList.map(x => { const el = document.createElement('div'); el.className = 'poi-pin'; el.innerHTML = html(x); return mkMarker(el, [x.lon, x.lat], 'bottom'); });
+}
 function routeAhead(maxKm) { // points de l'itinéraire devant la voiture, tous les ~2 km
   if (!nav.line || !nav.gps) return [];
   let best = 0, bd = Infinity;
@@ -3523,11 +3612,7 @@ async function searchPlaces(a) {
   list.sort((x, y) => x.km - y.km);
   const seen = new Set(); list = list.filter(x => { const k = x.nom + Math.round(x.km); if (seen.has(k)) return false; seen.add(k); return true; }).slice(0, 8);
   poiList = list.map((x, i) => Object.assign(x, { numero: i + 1 }));
-  if (nav.map && window.L) {
-    if (!poiLayer) poiLayer = L.layerGroup().addTo(nav.map);
-    poiLayer.clearLayers();
-    poiList.forEach(x => L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'poi-pin', html: `<span>${x.numero}</span>`, iconSize: [26, 26] }) }).addTo(poiLayer));
-  }
+  showPois(x => `<span>${x.numero}</span>`);
   holo(list.length ? 'Lieux trouvés' : 'Aucun lieu trouvé', list.length
     ? `<p class="note">${esc(a.nom || a.type.replace('_', ' '))} · ${where === 'sur_le_trajet' ? 'sur votre trajet' : where === 'pres_arrivee' ? "près de l'arrivée" : 'autour de vous'}</p><ol class="pois">${poiList.map(x => `<li><b>${x.numero}. ${esc(x.nom)}</b><span>${where === 'sur_le_trajet' ? 'dans ' + x.km + ' km' + (x.detour_m > 300 ? ' · à ' + x.detour_m + ' m de la route' : '') : 'à ' + fr(x.km, 1) + ' km'}${x.adresse ? ' · ' + esc(x.adresse) : ''}</span></li>`).join('')}</ol><p class="note">Dites « emmène-moi au 2 » ou « ajoute le 1 comme étape » pour y aller.</p>`
     : `<p>Rien trouvé ${where === 'sur_le_trajet' ? 'sur les prochains kilomètres du trajet' : 'à proximité'}.</p>`, { kicker: 'OpenStreetMap', ms: 40000 });
@@ -3971,11 +4056,7 @@ async function cheapestFuel(a = {}) {
   const avg = list.reduce((s, x) => s + x.prix, 0) / list.length;
   list.sort((x, y) => x.prix - y.prix || x.km - y.km); list = list.slice(0, 8);
   poiList = list.map((x, i) => Object.assign(x, { numero: i + 1 })); // « ajoute la 2 comme étape » via aller_au_lieu
-  if (nav.map && window.L) {
-    if (!poiLayer) poiLayer = L.layerGroup().addTo(nav.map);
-    poiLayer.clearLayers();
-    poiList.forEach(x => L.marker([x.lat, x.lon], { icon: L.divIcon({ className: 'poi-pin', html: `<span class="price">${x.numero} · ${fr(x.prix, 3)}</span>`, iconSize: [84, 26] }) }).addTo(poiLayer));
-  }
+  showPois(x => `<span class="price">${x.numero} · ${fr(x.prix, 3)}</span>`);
   const au = autonomy(), tank = garage.tank || 60, litres = au.litres != null ? Math.max(0, tank - au.litres) : tank * 0.8;
   const save = (avg - list[0].prix) * litres;
   const label = { gazole: 'Gazole', sp95: 'SP95', sp98: 'SP98', e10: 'E10', e85: 'E85', gplc: 'GPL' }[f];
@@ -4227,6 +4308,7 @@ function frame(now) {
     if (page === 'drive' || page === 'nav') {
       const n = navInfo();
       $('turnDist').textContent = fmtDist(n.dist); $('turnStreet').textContent = n.street;
+      if (nav.map) updTurn3d(n);
       if (n.label) $('etaLbl').textContent = n.label;
       $('turnIco').setAttribute('d', ICONS[n.kind]);
       $('eta').textContent = n.eta; $('remain').textContent = fmtDist(n.remain);
