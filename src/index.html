@@ -161,6 +161,41 @@ button{cursor:pointer}
 .ring{fill:none;stroke:var(--acc-dim);stroke-width:1;stroke-dasharray:2 10;opacity:.6;transform-box:view-box;transform-origin:200px 200px;animation:spin 40s linear infinite}
 .ring.rev{stroke-dasharray:30 6 4 6;animation-duration:26s;animation-direction:reverse;opacity:.35}
 :root[data-dna="D"] .ring{animation-duration:14s}
+/* ===== MODE SPORT (DNA D) : combiné course, rapport géant, rampe LED, effets ===== */
+:root[data-dna="D"] .drive{grid-template-columns:1.6fr .78fr 1fr}
+:root[data-dna="D"] .panel{background:linear-gradient(180deg,rgba(var(--panel-rgb),.62),rgba(var(--panel2-rgb),.78))}
+:root[data-dna="D"] .panel::before,:root[data-dna="D"] .panel::after{width:20px;height:20px;border-width:3px;filter:drop-shadow(0 0 6px var(--acc))}
+:root[data-dna="D"] .cluster{box-shadow:inset 0 0 calc(20px + var(--rev,0) * 60px) rgba(var(--acc-rgb),calc(.1 + var(--rev,0) * .35));border-color:rgba(var(--acc-rgb),.55)}
+.segs{display:none}
+:root[data-dna="D"] .segs{display:inline}
+:root[data-dna="D"] .rpm-arc,:root[data-dna="D"] #rpmTrack,:root[data-dna="D"] #rpmRed{display:none}
+.seg-r{fill:none;stroke-width:15;stroke:rgba(var(--acc-rgb),.13)}
+.seg-r.on{stroke:#3cff9e}.seg-r.on.y{stroke:#ffd23f}.seg-r.on.r{stroke:var(--acc)}
+.segs.flash .seg-r.on{animation:ledflash .12s steps(2) infinite}
+.gear-big{display:none;font-family:var(--f-display);font-weight:700;font-style:italic;font-size:150px;fill:var(--text);text-anchor:middle;dominant-baseline:central;transform-box:fill-box;transform-origin:center}
+:root[data-dna="D"] .gear-big{display:inline}
+.gear-big.slam{animation:slam .38s cubic-bezier(.2,1.5,.4,1)}
+.gear-big.hi{fill:#fff;filter:drop-shadow(3px 0 rgba(0,240,255,.75)) drop-shadow(-3px 0 rgba(255,30,60,.9)) drop-shadow(0 0 14px var(--acc))}
+@keyframes slam{0%{transform:scale(1.8) skewX(-12deg);opacity:.15;filter:blur(8px)}60%{transform:scale(.94)}100%{transform:scale(1);opacity:1;filter:none}}
+:root[data-dna="D"] #gear,:root[data-dna="D"] .gear-box,:root[data-dna="D"] #modeTag,:root[data-dna="D"] #shift{display:none}
+:root[data-dna="D"] #spd{font-size:56px;font-style:italic;transform:translateY(78px)}
+:root[data-dna="D"] #kmhUnit{transform:translateY(76px)}
+:root[data-dna="D"] #rpmTxt{transform:translateY(76px);font-size:17px}
+:root[data-dna="D"] .boost-val,:root[data-dna="D"] .tv,:root[data-dna="D"] .stat b,:root[data-dna="D"] .turn b,:root[data-dna="D"] .ptime{font-style:italic}
+:root[data-dna="D"] .leds{height:14px;gap:5px}
+:root[data-dna="D"] .boost.hot{border-color:var(--acc);box-shadow:inset 0 0 40px rgba(var(--acc-rgb),.35),0 0 24px rgba(var(--acc-rgb),.35)}
+:root[data-dna="D"] .boost.hot .boost-val{color:#fff;text-shadow:0 0 14px var(--acc),0 0 36px var(--acc)}
+:root[data-dna="D"] .boost.hot .boost-val::after{content:" BOOST";font-size:15px;letter-spacing:.3em;color:var(--acc);animation:blink .5s steps(2) infinite}
+:root[data-dna="D"] .top::after{content:"";position:absolute;left:0;right:0;bottom:-6px;height:3px;background:repeating-linear-gradient(115deg,var(--acc) 0 26px,transparent 26px 34px,#fff 34px 40px,transparent 40px 52px);background-size:200px 100%;animation:stripe 1.2s linear infinite;opacity:.85}
+:root[data-dna="D"] .top{position:relative}
+@keyframes stripe{to{background-position:200px 0}}
+.launch{position:absolute;top:30px;left:16px;z-index:3;display:flex;align-items:baseline;gap:6px;padding:6px 12px;border:1px solid var(--acc);background:rgba(var(--bg-rgb),.75);font-family:var(--f-display);box-shadow:0 0 18px rgba(var(--acc-rgb),.4)}
+.launch span{font-family:var(--f-mono);font-size:11px;letter-spacing:.15em;color:var(--muted)}
+.launch b{font-size:30px;font-style:italic;color:#fff;font-variant-numeric:tabular-nums}
+.app.kick{animation:kick .2s linear}
+.app.shake{animation:shake .09s linear infinite}
+@keyframes kick{0%{transform:none}20%{transform:translate(-4px,3px) scale(1.006)}45%{transform:translate(4px,-2px)}70%{transform:translate(-2px,1px)}100%{transform:none}}
+@keyframes shake{0%,100%{transform:none}50%{transform:translate(1px,-1px)}}
 .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;border-top:1px solid var(--line);padding-top:8px}
 .stat{display:flex;flex-direction:column;gap:2px;min-width:0}
 .stat b{font-family:var(--f-display);font-size:19px;font-weight:600;font-variant-numeric:tabular-nums;white-space:nowrap}
@@ -556,6 +591,7 @@ button{cursor:pointer}
     <section class="page drive" data-page="drive" aria-label="Conduite">
       <div class="panel cluster">
         <div class="leds" id="leds" aria-hidden="true"></div>
+        <div class="launch" id="launchChip" hidden><span>0–100</span><b>0,00</b><small>s</small></div>
         <svg viewBox="0 0 400 400" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Compte-tours et vitesse">
           <defs><filter id="glow" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
           <circle class="ring" cx="200" cy="200" r="188"/>
@@ -563,12 +599,14 @@ button{cursor:pointer}
           <path id="rpmTrack" class="trk"/>
           <path id="rpmRed" class="red-zone"/>
           <path id="rpmArc" class="rpm-arc"/>
+          <g id="rpmSegs" class="segs" filter="url(#glow)"></g>
           <g id="ticks"></g>
           <path id="spdTrack" class="spd-trk"/>
           <path id="spdArc" class="spd-arc"/>
           <text id="modeTag" class="mode-tag" x="200" y="140">NATURAL</text>
+          <text id="gearBig" class="gear-big" x="200" y="188">N</text>
           <text id="spd" class="spd" x="200" y="226">0</text>
-          <text class="unit" x="200" y="252">KM/H</text>
+          <text class="unit" id="kmhUnit" x="200" y="252">KM/H</text>
           <text id="rpmTxt" class="rpm-txt" x="200" y="278">830 tr/min</text>
           <rect class="gear-box" x="176" y="298" width="48" height="52"/>
           <text id="gear" class="gear" x="200" y="325">N</text>
@@ -1152,6 +1190,7 @@ $('nightBtn').addEventListener('click', () => {
 });
 
 /* ---------- Effets d'ambiance : sport (D), pluie (A), calme (N) ---------- */
+const fxState = { burst: 0, flash: 0 }; // burst : accélération hyperespace ; flash : éclair de passage
 const fx = (() => {
   const back = $('fxBack'), front = $('fxFront'), rnd = Math.random;
   let mode = 'N', t = 0, bolt = 14;
@@ -1166,23 +1205,71 @@ const fx = (() => {
     if (c.width !== Math.round(w * dpr) || c.height !== Math.round(h * dpr)) { c.width = Math.round(w * dpr); c.height = Math.round(h * dpr); }
     const ctx = c.getContext('2d'); ctx.setTransform(dpr, 0, 0, dpr, 0, 0); ctx.clearRect(0, 0, w, h); return { ctx, w, h };
   }
-  function sport(B, dt, s) {
-    const { ctx, w, h } = B, acc = T['--acc-rgb'], vx = w * 0.5, vy = h * 0.42, maxR = Math.hypot(w, h) * 0.62;
-    const spd = 0.2 + s.speed / 130 * 1.1 + (s.accel > 2 ? 0.4 : 0);
-    const core = ctx.createRadialGradient(vx, vy, 0, vx, vy, maxR * 0.5);
-    core.addColorStop(0, `rgba(${acc},.16)`); core.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = core; ctx.fillRect(0, 0, w, h);
-    ctx.lineCap = 'round';
+  // MODE SPORT : sol en perspective qui défile, hyperespace, lignes de vitesse sur les bords, étincelles de turbo, flash de passage
+  let floorOff = 0;
+  const side = Array.from({ length: 70 }, () => ({ y: rnd(), x: rnd(), l: 0.04 + rnd() * 0.12, v: 0.6 + rnd() * 1.4, s: rnd() < 0.5 ? -1 : 1 }));
+  const sparks = [];
+  function sport(B, F, dt, s) {
+    const { ctx, w, h } = B, acc = T['--acc-rgb'];
+    const v = clamp((s.speed || 0) / 170, 0, 1), rev = clamp(((s.rpm || 800) - 1500) / 3000, 0, 1), bst = clamp((s.boost || 0) / 1.5, 0, 1);
+    fxState.burst = Math.max(0, fxState.burst - dt);
+    const spd = 0.25 + v * 1.7 + (s.accel > 2 ? 0.5 : 0) + fxState.burst * 2.5;
+    const hz = h * 0.5, vx = w * 0.5;
+    // lueur d'horizon
+    const hg = ctx.createRadialGradient(vx, hz, 0, vx, hz, w * 0.6);
+    hg.addColorStop(0, `rgba(${acc},${0.22 + rev * 0.25 + fxState.burst * 0.2})`); hg.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = hg; ctx.fillRect(0, 0, w, h);
+    // sol en perspective
+    floorOff = (floorOff + dt * spd * 1.1) % 1;
+    ctx.save(); ctx.beginPath(); ctx.rect(0, hz, w, h - hz); ctx.clip();
+    ctx.lineWidth = 1.2; ctx.strokeStyle = `rgba(${acc},${0.16 + rev * 0.22})`; ctx.beginPath();
+    for (let i = -14; i <= 14; i++) { ctx.moveTo(vx + i * w * 0.012, hz); ctx.lineTo(vx + i * w * 0.2, h + 10); }
+    ctx.stroke();
+    for (let k = 0; k < 16; k++) {
+      const z = (k + floorOff) / 16, y = hz + (h - hz) * Math.pow(z, 2.4);
+      ctx.strokeStyle = `rgba(${acc},${(0.05 + z * 0.45) * (0.5 + rev * 0.5)})`; ctx.lineWidth = 0.6 + z * 2;
+      ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(w, y); ctx.stroke();
+    }
+    ctx.restore();
+    // hyperespace
+    const maxR = Math.hypot(w, h) * 0.62; ctx.lineCap = 'round';
     streaks.forEach(st => {
       st.r += st.v * spd * dt * 0.8 * (0.25 + st.r);
       if (st.r > 1.15) Object.assign(st, newStreak(false));
-      const r0 = st.r * maxR, len = (16 + spd * 160) * st.r, ca = Math.cos(st.a), sa = Math.sin(st.a);
-      ctx.strokeStyle = `rgba(${acc},${Math.min(.7, st.r * .9)})`; ctx.lineWidth = st.w * (0.4 + st.r * 1.4);
-      ctx.beginPath(); ctx.moveTo(vx + ca * r0, vy + sa * r0); ctx.lineTo(vx + ca * (r0 + len), vy + sa * (r0 + len)); ctx.stroke();
+      const r0 = st.r * maxR, len = (20 + spd * 190) * st.r, ca = Math.cos(st.a), sa = Math.sin(st.a);
+      ctx.strokeStyle = st.w > 1.8 ? `rgba(255,255,255,${Math.min(.55, st.r * .7)})` : `rgba(${acc},${Math.min(.75, st.r * .95)})`;
+      ctx.lineWidth = st.w * (0.4 + st.r * 1.5);
+      ctx.beginPath(); ctx.moveTo(vx + ca * r0, hz + sa * r0); ctx.lineTo(vx + ca * (r0 + len), hz + sa * (r0 + len)); ctx.stroke();
     });
-    const rev = clamp((s.rpm - 1500) / 3000, 0, 1), g = ctx.createLinearGradient(0, h, 0, h * 0.5);
-    g.addColorStop(0, `rgba(${acc},${0.14 + rev * 0.3})`); g.addColorStop(1, 'rgba(0,0,0,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, h * 0.5, w, h * 0.5);
+    // chaleur en bas, suivant le régime
+    const g = ctx.createLinearGradient(0, h, 0, h * 0.55);
+    g.addColorStop(0, `rgba(${acc},${0.18 + rev * 0.35})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.fillRect(0, h * 0.55, w, h * 0.45);
+    // premier plan : lignes de vitesse sur les bords (jamais au centre, pour garder les infos lisibles)
+    const f = F.ctx, fw = F.w, fh = F.h, intensity = clamp(v * 1.3 + fxState.burst, 0, 1.4);
+    if (intensity > 0.08) {
+      f.lineCap = 'round';
+      side.forEach(l => {
+        l.x += l.v * dt * (0.4 + spd);
+        if (l.x > 1) { l.x = 0; l.y = rnd(); l.l = 0.04 + rnd() * 0.12; }
+        const band = fw * 0.13, x = l.s < 0 ? band * (1 - l.x) : fw - band * (1 - l.x), len = l.l * fw * (0.4 + intensity);
+        f.strokeStyle = `rgba(255,255,255,${0.05 + 0.28 * intensity * l.x})`; f.lineWidth = 1 + l.x * 1.5;
+        f.beginPath(); f.moveTo(x, l.y * fh); f.lineTo(x + l.s * len, l.y * fh); f.stroke();
+      });
+    }
+    // étincelles quand le turbo pousse fort (derrière les panneaux, visibles par transparence)
+    if (bst > 0.8 && sparks.length < 110) for (let k = 0; k < 4; k++) {
+      const left = rnd() < 0.5;
+      sparks.push({ x: left ? w * 0.02 : w * 0.98, y: h * (0.9 + rnd() * 0.1), vx: (left ? 1 : -1) * (160 + rnd() * 320), vy: -(260 + rnd() * 420), t: 0, life: 0.7 + rnd() * 0.7 });
+    }
+    for (let i = sparks.length - 1; i >= 0; i--) {
+      const p = sparks[i]; p.t += dt; if (p.t > p.life) { sparks.splice(i, 1); continue; }
+      const ox = p.x, oy = p.y; p.vy += 520 * dt; p.x += p.vx * dt; p.y += p.vy * dt;
+      ctx.strokeStyle = `rgba(255,${180 + rnd() * 60 | 0},80,${1 - p.t / p.life})`; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(ox, oy); ctx.lineTo(p.x, p.y); ctx.stroke();
+    }
+    // flash de passage de rapport
+    if (fxState.flash > 0) { f.fillStyle = `rgba(255,255,255,${fxState.flash * 0.22})`; f.fillRect(0, 0, fw, fh); fxState.flash = Math.max(0, fxState.flash - dt * 4); }
   }
   function wet(B, F, dt, s) {
     const { ctx, w, h } = B, acc = T['--acc-rgb'];
@@ -1242,11 +1329,35 @@ const fx = (() => {
     draw(dtIn, s) {
       const dt = reduceMotion ? 0 : dtIn; t += dt;
       const B = size(back), F = size(front);
-      if (mode === 'D') sport(B, dt, s); else if (mode === 'A') wet(B, F, dt, s); else calm(B, dt);
+      if (mode === 'D') sport(B, F, dt, s); else if (mode === 'A') wet(B, F, dt, s); else calm(B, dt);
     }
   };
 })();
+// Coup de gaz synthétique (Web Audio) à l'entrée en mode Sport — désactivable dans les réglages
+function revSound() {
+  if (AI.cfg && AI.cfg.sounds === false) return;
+  try {
+    const A = revSound.ctx || (revSound.ctx = new (window.AudioContext || window.webkitAudioContext)());
+    if (A.state === 'suspended') A.resume();
+    const t = A.currentTime, out = A.createGain(), lp = A.createBiquadFilter(), ws = A.createWaveShaper();
+    const curve = new Float32Array(1024); for (let i = 0; i < 1024; i++) { const x = i / 512 - 1; curve[i] = Math.tanh(x * 4); } ws.curve = curve;
+    lp.type = 'lowpass'; lp.frequency.setValueAtTime(700, t); lp.frequency.linearRampToValueAtTime(2600, t + 0.45); lp.frequency.linearRampToValueAtTime(900, t + 1.4);
+    out.gain.setValueAtTime(0.0001, t); out.gain.exponentialRampToValueAtTime(0.32, t + 0.08); out.gain.setValueAtTime(0.32, t + 0.5); out.gain.exponentialRampToValueAtTime(0.0001, t + 1.5);
+    [[1, 'sawtooth', 0.5], [2, 'square', 0.25], [0.5, 'sawtooth', 0.35]].forEach(([k, type, vol]) => {
+      const o = A.createOscillator(), g = A.createGain(); o.type = type; g.gain.value = vol;
+      o.frequency.setValueAtTime(42 * k, t); o.frequency.exponentialRampToValueAtTime(165 * k, t + 0.45); o.frequency.exponentialRampToValueAtTime(70 * k, t + 1.4);
+      o.connect(g); g.connect(ws); o.start(t); o.stop(t + 1.55);
+    });
+    ws.connect(lp); lp.connect(out); out.connect(A.destination);
+  } catch (e) {}
+}
+function kickScreen(strength) {
+  if (reduceMotion) return;
+  const a = document.querySelector('.app'); a.classList.remove('kick'); void a.offsetWidth; a.classList.add('kick');
+  fxState.flash = Math.max(fxState.flash, strength || 0.6);
+}
 function modeTransition(m) {
+  if (m === 'D') { revSound(); fxState.burst = 1.8; setTimeout(() => kickScreen(1), 250); }
   if (reduceMotion) return;
   const el = $('modeFx');
   el.className = 'modefx'; void el.offsetWidth;
@@ -1278,6 +1389,14 @@ for (let v = 0; v <= RPM_MAX; v += 250) {
   }
 }
 $('rpmTrack').setAttribute('d', arc(172, A0, A0 + SW));
+const RPM_SEGS = 48;
+for (let i = 0; i < RPM_SEGS; i++) {
+  const a0 = A0 + SW * i / RPM_SEGS + 0.9, a1 = A0 + SW * (i + 1) / RPM_SEGS - 0.9, frac = (i + 1) / RPM_SEGS;
+  const pth = document.createElementNS(NS, 'path'); pth.setAttribute('d', arc(171, a0, a1));
+  pth.setAttribute('class', 'seg-r' + (frac > 0.86 ? ' r' : frac > 0.66 ? ' y' : '')); $('rpmSegs').append(pth);
+}
+const rpmSegs = [...$('rpmSegs').children];
+let lastGear = null;
 $('rpmRed').setAttribute('d', arc(172, A0 + SW * 0.9, A0 + SW));
 $('spdTrack').setAttribute('d', arc(104, A0, A0 + SW));
 for (let i = 0; i < 32; i++) { const e = document.createElement('i'); if (i >= 26) e.className = 'hi'; $('seg').append(e); }
@@ -2508,6 +2627,7 @@ function openSettings(msg) {
     <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis (toujours)</label>
     <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
     <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
+    <label class="chk"><input type="checkbox" id="sSounds"> Sons du mode Sport (coup de gaz à l'activation)</label>
     <label class="chk"><input type="checkbox" id="sMsg2"> Lire mes messages à voix haute (WhatsApp, SMS…)</label>
     <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
     <p class="note" id="sMsg">${esc(msg || '')}</p>
@@ -2526,9 +2646,9 @@ function openSettings(msg) {
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
-  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked };
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
     if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
     configureMessages();
@@ -3553,6 +3673,20 @@ function frame(now) {
       $('gear').classList.toggle('none', s.gear == null);
       $('shift').classList.toggle('on', s.rpm > (dna === 'D' ? 3800 : 2700) && s.accel > 1 && s.gear < 6);
       if (dna === 'D') {
+        const rf = clamp((s.rpm || 0) / RPM_MAX, 0, 1), lit = Math.round(rf * RPM_SEGS);
+        rpmSegs.forEach((e, i) => e.classList.toggle('on', i < lit));
+        $('rpmSegs').classList.toggle('flash', s.rpm > 4100);
+        const gb = $('gearBig'), gtxt = s.gear == null ? '–' : s.gear === 0 ? 'N' : String(s.gear);
+        if (gb.textContent !== gtxt) {
+          gb.textContent = gtxt; gb.classList.remove('slam'); void gb.getBBox(); gb.classList.add('slam');
+          if (lastGear != null && s.gear > lastGear && lastGear > 0) kickScreen(s.rpm > 3000 || s.accel > 3 ? 0.9 : 0.4);
+          lastGear = s.gear;
+        }
+        gb.classList.toggle('hi', s.rpm > 3700);
+        document.querySelector('.app').classList.toggle('shake', s.rpm > 4300 && !reduceMotion);
+        document.querySelector('.boost').classList.toggle('hot', s.boost > 1.2);
+        document.querySelector('.cluster').style.setProperty('--rev', clamp((s.rpm - 1500) / 3000, 0, 1).toFixed(3));
+        const lc = $('launchChip'); lc.hidden = !perf.r0; if (perf.r0) lc.querySelector('b').textContent = fr(perf.r0.t, 2);
         const n = Math.round(clamp((s.rpm - 1800) / 2200, 0, 1) * leds.length);
         leds.forEach((e, i) => e.classList.toggle('on', i < n));
         $('leds').classList.toggle('flash', s.rpm > 3900);
