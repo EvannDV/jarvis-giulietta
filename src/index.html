@@ -2657,8 +2657,10 @@ function engineHolo() {
     <div data-state="${st.dpf(s.soot, s.regen)[0]}"><span class="label">Suie FAP</span><b style="color:var(--st)">${fr(s.soot)} %</b></div>
     <div><span class="label">Régime</span><b>${s.rpm == null ? 'NONE' : Math.round(s.rpm) + ' tr/min'}</b></div></div>`, { kicker: 'Rapport' });
 }
+const LIVE_RX = /^(jarvis )?(donne moi |dis moi |montre moi |affiche |lis moi |quelles sont |c est quoi )?(les |le |la )?(fil (info|d actu|d actualite)|infos? en direct|actus? en direct|actualites? en direct|dernieres (infos|actus|actualites|nouvelles|depeches)|flash info|quoi de neuf)( en direct)?$/;
 function answer(q) {
   const s = S(), t = norm(q), n = navInfo();
+  if (LIVE_RX.test(t.replace(/[!?.,]/g, '').trim())) { showLiveNews(true).catch(() => say("Le fil d'info ne répond pas. Vérifiez la connexion Internet.")); return null; }
   if (/^(ferme|fermer|cache|retire|enleve)( la| le| les| tout| ca)?( fenetre| galerie| photos?)?[ .!]*$/.test(t)) { closeHolo(); $('gallery').hidden = true; return "C'est fermé."; }
   if (FUEL_RX.test(t)) {
     const c = /sp ?98/.test(t) ? 'sp98' : /sp ?95/.test(t) ? 'sp95' : /e10/.test(t) ? 'e10' : /e85/.test(t) ? 'e85' : /gpl/.test(t) ? 'gpl' : 'gazole';
@@ -2774,7 +2776,8 @@ Navigation : pour savoir par où passe l'itinéraire (autoroute, péages, routes
 Mécanique : etat_voiture contient analyse_appli (verdicts calculés par l'appli) et valeurs_normales_2_0_jtdm : appuie-toi dessus, pas sur des valeurs génériques, et cite les chiffres utiles (valeur mesurée, pic, régime, plage normale) ; un moteur froid n'est pas « en pleine forme ». Pour l'évolution, les pics de turbo, le démarrage ou la montée en température, appelle historique_moteur. Pour les codes défaut, appelle diagnostic et explique chaque code ; ne conseille jamais de les effacer sans réparation. Pour « explique-moi » après une alerte, appuie-toi sur derniere_alerte.
 Lieux : chercher_lieu seulement quand le conducteur demande un lieu (station, McDo, parking…). N'appelle aller_au_lieu que s'il demande explicitement d'y aller ou de l'ajouter comme étape ; sinon, propose-le simplement.
 Messages : ne lis ou ne prépare une réponse que si le conducteur le demande ; une réponse n'est envoyée qu'après sa confirmation orale (« oui »), relis-la-lui.
-Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.`;
+Connaissances : pour une question de culture générale, réponds directement ; pour un fait précis, une date ou une biographie, utilise wikipedia ; pour l'actualité récente d'un sujet, utilise recherche_actualites.
+Actualité en direct : tu as un vrai accès au direct. Tes connaissances internes s'arrêtent avant aujourd'hui, donc pour tout événement récent ou en cours (« quoi de neuf », « où en est… », un score, une élection, une personne dans l'actualité), appelle fil_info ou recherche_actualites, puis réponds en citant l'heure ou l'ancienneté des infos (« il y a 20 minutes, franceinfo… »). Ne dis jamais que tu n'as que des archives ou que le direct est indisponible sans avoir appelé ces outils ; si un outil échoue, dis simplement que la connexion ne répond pas.`;
 
 async function gemini(body, models = AI_MODELS()) {
   let lastErr = null;
@@ -3006,6 +3009,7 @@ function openSettings(msg) {
     <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
     <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
     <label class="chk"><input type="checkbox" id="sSounds"> Sons du mode Sport (coup de gaz à l'activation)</label>
+    <label class="chk"><input type="checkbox" id="sFlash"> Flash info : annoncer les alertes et directs importants (franceinfo, toutes les 10 min)</label>
     <label class="chk"><input type="checkbox" id="sBreaks"> Copilote : me proposer une pause (après 2 h de route, 1 h la nuit)</label>
     <label class="chk"><input type="checkbox" id="sMsg2"> Lire mes messages à voix haute (WhatsApp, SMS…)</label>
     <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
@@ -3025,9 +3029,9 @@ function openSettings(msg) {
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
-  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sFlash').checked = !!AI.cfg.flash; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked, flash: $('sFlash').checked };
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
     if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
     configureMessages();
@@ -3131,10 +3135,58 @@ async function searchCommons(q, n) {
       legende: strip((md.ImageDescription || {}).value).slice(0, 200), source: 'Wikimedia Commons', credit: strip((md.Artist || {}).value).slice(0, 60) };
   }).filter(x => x.src);
 }
-async function searchNewsText(q) {
-  const txt = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=fr&gl=FR&ceid=FR:fr`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
-  return parseRss(txt, 'Google Actualités').slice(0, 8).map(it => ({ titre: it.titre, source: it.source, date: it.date ? new Date(it.date).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' }) : '' }));
+/* ---------- Actualité en direct : plus récent d'abord, avec l'heure ---------- */
+function agoNews(d) {
+  const t = new Date(d).getTime(); if (!t) return '';
+  const m = Math.round((Date.now() - t) / 60000);
+  return m < 1 ? "à l'instant" : m < 60 ? `il y a ${m} min` : m < 24 * 60 ? `il y a ${Math.round(m / 60)} h` : new Date(t).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long' });
 }
+const newsTime = d => { const t = new Date(d); return isNaN(t) ? '' : t.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' }); };
+async function searchNewsText(q) {
+  // Google Actualités : d'abord les dernières 24 h, puis 7 jours si le sujet est calme ; jamais d'archives en premier
+  const get = async when => {
+    const txt = await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q + (when ? ' when:' + when : ''))}&hl=fr&gl=FR&ceid=FR:fr`).then(r => { if (!r.ok) throw new Error('HTTP ' + r.status); return r.text(); });
+    return parseRss(txt, 'Google Actualités').filter(it => it.titre).sort((a, b) => (new Date(b.date) || 0) - (new Date(a.date) || 0));
+  };
+  let l = await get('1d'), periode = 'dernières 24 h';
+  if (l.length < 3) { l = await get('7d'); periode = '7 derniers jours'; }
+  if (!l.length) { l = await get(''); periode = 'plus ancien'; }
+  return { periode, articles: l.slice(0, 8).map(it => ({ titre: it.titre.replace(/ - [^-]+$/, ''), source: it.source, quand: agoNews(it.date), heure: newsTime(it.date) })) };
+}
+const LIVE_FEEDS = [['https://www.francetvinfo.fr/titres.rss', 'franceinfo'], ['https://www.lemonde.fr/en_continu/rss_full.xml', 'Le Monde'], ['https://news.google.com/rss?hl=fr&gl=FR&ceid=FR:fr', 'Google Actualités']];
+async function liveNews(n) {
+  const res = await Promise.allSettled(LIVE_FEEDS.map(([u, src]) => fetch(u).then(r => r.ok ? r.text() : Promise.reject()).then(t => parseRss(t, src))));
+  const seen = new Set(), all = [];
+  res.forEach((r, fi) => r.status === 'fulfilled' && r.value.forEach(it => {
+    if (!it.titre) return;
+    const titre = /news\.google/.test(LIVE_FEEDS[fi][0]) ? it.titre.replace(/ - [^-]+$/, '') : it.titre;
+    const k = norm(titre).replace(/^(alerte|direct|info franceinfo|urgent)\W+/, '').replace(/[^a-z0-9 ]/g, '').slice(0, 45); if (seen.has(k)) return; seen.add(k);
+    all.push(Object.assign(it, { titre, ts: new Date(it.date).getTime() || 0 }));
+  }));
+  if (!all.length) throw new Error('aucun flux joignable');
+  return all.sort((a, b) => b.ts - a.ts).slice(0, n || 10);
+}
+function liveHtml(list) {
+  return `<ul class="news">${list.map(x => `<li style="grid-template-columns:${x.image ? '72px ' : ''}1fr">${x.image ? `<img src="${esc(x.image)}" alt="" loading="lazy">` : ''}<div><b>${esc(x.titre)}</b><span>${esc(newsTime(x.date))} · ${esc(agoNews(x.date))} · ${esc(x.source)}</span></div></li>`).join('')}</ul>`;
+}
+async function showLiveNews(sayIt) {
+  const l = await liveNews(10);
+  holo('Fil info · en direct', liveHtml(l), { kicker: `Mis à jour à ${stamp()}`, ms: 60000 });
+  if (sayIt) say(`Dernière info, ${agoNews(l[0].date)} : ${l[0].titre}. ${l[1] ? 'Ensuite : ' + l[1].titre + '.' : ''} Le reste du fil est à l'écran.`);
+  return l;
+}
+// Flash info : franceinfo toutes les 10 min, annonce les alertes et directs nouveaux (option, sans requête Gemini)
+const FLASH = { seen: new Set(store.get('flashSeen', [])), first: true };
+async function flashTick() {
+  if (!AI.cfg.flash) return;
+  try {
+    const l = await liveNews(15), fresh = l.filter(x => x.ts > Date.now() - 45 * 60000 && /^(alerte|direct|info franceinfo|urgent|breaking)|en direct/i.test(x.titre) && !FLASH.seen.has(x.titre));
+    l.forEach(x => FLASH.seen.add(x.titre)); store.set('flashSeen', [...FLASH.seen].slice(-200));
+    if (FLASH.first) { FLASH.first = false; return; } // pas de rafale au démarrage
+    if (fresh[0]) say('Flash info, monsieur : ' + fresh[0].titre.replace(/^(ALERTE|DIRECT|INFO FRANCEINFO)\s*[.:-]?\s*/i, '') + '.');
+  } catch (e) { /* hors réseau */ }
+}
+setInterval(flashTick, 600000); setTimeout(flashTick, 20000);
 async function wikiLookup(q) {
   const s = await fetch(`https://fr.wikipedia.org/w/api.php?action=query&list=search&srsearch=${encodeURIComponent(q)}&srlimit=1&format=json&origin=*`).then(r => r.json());
   const t = s.query && s.query.search[0] && s.query.search[0].title;
@@ -3246,7 +3298,8 @@ AI_TOOLS.push(
   { name: 'galerie', description: "Pilote la galerie de photos affichée : ouvrir une photo, revenir à la grille de toutes les photos, suivante, précédente, zoom avant, zoom arrière, fermer.", parameters: { type: 'object', properties: { action: { type: 'string', enum: ['ouvrir', 'grille', 'suivante', 'precedente', 'zoom_avant', 'zoom_arriere', 'fermer'] }, numero: { type: 'integer', description: 'Numéro de la photo (1 = première)' } }, required: ['action'] } },
   { name: 'decrire_image', description: 'Regarde une photo de la galerie et décrit ce qu\'on y voit.', parameters: { type: 'object', properties: { numero: { type: 'integer', description: 'Numéro de la photo ; par défaut celle affichée' } } } },
   { name: 'wikipedia', description: 'Résumé Wikipédia (en français) d\'un sujet précis, avec une image, affiché à l\'écran.', parameters: { type: 'object', properties: { sujet: { type: 'string' } }, required: ['sujet'] } },
-  { name: 'recherche_actualites', description: 'Derniers articles de presse (Google Actualités) sur un sujet précis.', parameters: { type: 'object', properties: { question: { type: 'string' } }, required: ['question'] } }
+  { name: 'recherche_actualites', description: "Articles de presse EN DIRECT (Google Actualités, dernières 24 h en priorité, triés du plus récent) sur un sujet précis : événement en cours, match, élection, personne, entreprise…", parameters: { type: 'object', properties: { question: { type: 'string', description: 'Mots-clés du sujet' } }, required: ['question'] } },
+  { name: 'fil_info', description: "Fil d'info en direct : les dernières dépêches toutes rubriques (franceinfo, Le Monde en continu, Google Actualités) avec leur heure. Pour « quoi de neuf », « les dernières infos », « que se passe-t-il »." }
 );
 Object.assign(AI_IMPL, {
   chercher_images: async a => {
@@ -3277,10 +3330,14 @@ Object.assign(AI_IMPL, {
     return { titre: w.titre, resume: String(w.resume || '').slice(0, 1500) };
   },
   recherche_actualites: async a => {
-    const l = await searchNewsText(a.question);
+    const r = await searchNewsText(a.question), l = r.articles;
     if (!l.length) return { ok: false, raison: 'aucun article trouvé' };
-    holo('Actualités', `<p class="note">${esc(a.question)}</p><ul class="news">${l.map(x => `<li style="grid-template-columns:1fr"><div><b>${esc(x.titre)}</b><span>${esc(x.source)} · ${esc(x.date)}</span></div></li>`).join('')}</ul>`, { kicker: 'Google Actualités', ms: 40000 });
-    return { articles: l };
+    holo('Actualités', `<p class="note">${esc(a.question)} · ${esc(r.periode)}</p><ul class="news">${l.map(x => `<li style="grid-template-columns:1fr"><div><b>${esc(x.titre)}</b><span>${esc(x.source)} · ${esc(x.quand)}</span></div></li>`).join('')}</ul>`, { kicker: 'Google Actualités · en direct', ms: 45000 });
+    return { maintenant: new Date().toLocaleString('fr-FR'), periode: r.periode, articles: l };
+  },
+  fil_info: async () => {
+    const l = await showLiveNews(false);
+    return { maintenant: new Date().toLocaleString('fr-FR'), depeches: l.map(x => ({ titre: x.titre, resume: x.resume, source: x.source, heure: newsTime(x.date), quand: agoNews(x.date) })) };
   }
 });
 
@@ -4007,7 +4064,7 @@ const UPD_INSTALL_RX = /(installe|lance|fais|telecharge).*(mise a jour|derniere 
 const UPD_CHECK_RX = /(y a|il y a|est ce qu).*(mise a jour|nouvelle version)|verifie.*(mise a jour|version)|quelle version/;
 function isQuickCommand(q) {
   const t = norm(q).replace(/[!?.,]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^jarvis /, '').replace(/ (stp|s il te plait|s il vous plait)$/, '');
-  return /^(etat moteur|diagnostic|entretien|actualites|mode demo|mode simulation)$/.test(t)
+  return /^(etat moteur|diagnostic|entretien|actualites|mode demo|mode simulation)$/.test(t) || LIVE_RX.test(t)
     || /^(ferme|fermer|cache|retire|enleve)( la| le| les| tout| ca)?( fenetre| galerie| photos?)?$/.test(t)
     || FUEL_RX.test(t) || UPD_INSTALL_RX.test(t) || UPD_CHECK_RX.test(t)
     || /^(passe |mets |active |bascule )?(en |le )?mode (sport|dynamic|d|pluie|all ?weather|a|normal|natural|n|nuit|jour)$/.test(t)
