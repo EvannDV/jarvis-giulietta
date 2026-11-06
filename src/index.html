@@ -22,6 +22,12 @@
   --line:#42161b; --line-hi:#77262d; --acc:#ff4a52; --acc-rgb:255,74,82; --acc-dim:#b3383f;
   --text:#ffe7e3; --muted:#ab7671; --red:#ff2a8a;
 }
+/* DNA · Natural : mode normal « Grand Tourisme » (noir profond, champagne) */
+:root[data-dna="N"]{
+  --bg:#09090a; --bg-rgb:9,9,10; --bg-glow:#151513; --panel:#141416; --panel-2:#0d0d0f; --panel-rgb:20,20,22; --panel2-rgb:13,13,15;
+  --line:#232221; --line-hi:#3a3732; --acc:#c9b48a; --acc-rgb:201,180,138; --acc-dim:#8a7a5c;
+  --text:#efe9dd; --muted:#8c877d; --ice:#d8c39a; --ok:#7fb98f; --amber:#e0a85a; --red:#e05a4c;
+}
 /* DNA · All-weather : mode pluie */
 :root[data-dna="A"]{
   --bg:#03070f; --bg-rgb:3,7,15; --bg-glow:#0e2244; --panel:#07111f; --panel-2:#040a14; --panel-rgb:7,17,31; --panel2-rgb:4,10,20;
@@ -161,6 +167,46 @@ button{cursor:pointer}
 .ring{fill:none;stroke:var(--acc-dim);stroke-width:1;stroke-dasharray:2 10;opacity:.6;transform-box:view-box;transform-origin:200px 200px;animation:spin 40s linear infinite}
 .ring.rev{stroke-dasharray:30 6 4 6;animation-duration:26s;animation-direction:reverse;opacity:.35}
 :root[data-dna="D"] .ring{animation-duration:14s}
+/* ===== MODE NORMAL (DNA N) : Grand Tourisme, deux cadrans à aiguille ===== */
+.gt-dial,.gt-info{display:none}
+:root[data-dna="N"] body{background:linear-gradient(180deg,#0b0b0c,#050506) fixed}
+:root[data-dna="N"] body::after{display:none}
+:root[data-dna="N"] .panel{border-radius:22px;border-color:#232221;background:linear-gradient(180deg,#141416,#0d0d0f);box-shadow:0 20px 40px rgba(0,0,0,.45),inset 0 1px 0 rgba(255,255,255,.04)}
+:root[data-dna="N"] .panel::before,:root[data-dna="N"] .panel::after{display:none}
+:root[data-dna="N"] .brand-name{color:var(--text);text-shadow:none;font-weight:500}
+:root[data-dna="N"] .tab{font-weight:400}
+:root[data-dna="N"] .tab[aria-selected="true"]{color:var(--text);text-shadow:none;border-bottom:1px solid var(--acc)}
+:root[data-dna="N"] .dna{border-color:#2c2a27;border-radius:16px;overflow:hidden}
+:root[data-dna="N"] .dna button{font-weight:400}
+:root[data-dna="N"] .dna button[aria-pressed="true"]{background:var(--text);color:#0b0b0c}
+:root[data-dna="N"] .icon-btn,:root[data-dna="N"] .btn,:root[data-dna="N"] .badge{border-radius:12px}
+:root[data-dna="N"] .btn.primary{background:var(--text);border-color:var(--text);color:#0b0b0c}
+:root[data-dna="N"] .turn,:root[data-dna="N"] .eta{border-radius:16px;background:rgba(13,13,15,.88);border-color:#2a2926}
+:root[data-dna="N"] .turn b{font-weight:500}
+:root[data-dna="N"] .route-line{filter:none}
+:root[data-dna="N"] .car-ico{filter:drop-shadow(0 2px 6px rgba(0,0,0,.6))}
+:root[data-dna="N"] .core i{box-shadow:none}
+:root[data-dna="N"] .core i:nth-child(1){border-style:solid;opacity:.6}
+:root[data-dna="N"] .core i:nth-child(3){box-shadow:0 0 10px rgba(var(--acc-rgb),.5)}
+:root[data-dna="N"] .drive{grid-template-columns:minmax(0,1fr) minmax(0,.62fr) minmax(0,1fr);grid-template-rows:minmax(0,1fr) auto;grid-template-areas:"rpm map spd" "rpm info spd"}
+:root[data-dna="N"] .drive > .cluster,:root[data-dna="N"] .drive > .engine{display:none}
+:root[data-dna="N"] .drive > .mapp{grid-area:map}
+:root[data-dna="N"] .gt-dial{display:grid;place-items:center;min-height:0;background:none;border:0;box-shadow:none}
+:root[data-dna="N"] #gtRpmP{grid-area:rpm}
+:root[data-dna="N"] #gtSpdP{grid-area:spd}
+:root[data-dna="N"] .gt-info{display:flex;flex-direction:column;grid-area:info;padding:6px 18px}
+.gt-dial svg{width:100%;height:100%;max-width:100%;max-height:100%;display:block;overflow:visible}
+.gt-needle{transform-box:view-box;transform-origin:235px 235px;transition:transform .22s linear}
+.gt-big{font-family:var(--f-display);font-weight:300;font-size:66px;fill:var(--text);text-anchor:middle;font-variant-numeric:tabular-nums}
+.gt-big.none{font-size:30px;letter-spacing:.1em}
+.gt-unit{font-family:var(--f-mono);font-size:11px;letter-spacing:4px;fill:var(--muted);text-anchor:middle}
+.gt-sub{font-family:var(--f-body);font-size:17px;fill:var(--acc);text-anchor:middle}
+.gt-sub.over{fill:var(--red);font-weight:600}
+.gt-num{font-family:var(--f-display);font-size:20px;fill:#bdb6a8;text-anchor:middle;dominant-baseline:central}
+.gt-row{display:flex;justify-content:space-between;align-items:baseline;gap:10px;padding:10px 0;border-bottom:1px solid #1d1c1b}
+.gt-row:last-child{border-bottom:0}
+.gt-row b{font-family:var(--f-display);font-weight:400;font-size:21px;font-variant-numeric:tabular-nums;white-space:nowrap}
+.gt-row b small{font-size:12px;color:var(--muted);margin-left:3px}
 /* ===== MODE SPORT (DNA D) : combiné course, rapport géant, rampe LED, effets ===== */
 :root[data-dna="D"] .drive{grid-template-columns:1.6fr .78fr 1fr}
 :root[data-dna="D"] .panel{background:linear-gradient(180deg,rgba(var(--panel-rgb),.62),rgba(var(--panel2-rgb),.78))}
@@ -232,6 +278,7 @@ button{cursor:pointer}
 #realWrap{position:absolute;inset:0;overflow:hidden;background:var(--panel-2)}
 #realMap{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%) rotate(var(--rot,0deg));transition:transform .9s linear;background:var(--panel-2)}
 #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.7) contrast(1.2) sepia(1) hue-rotate(155deg) saturate(2.6)}
+:root[data-dna="N"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.45) contrast(1.15) sepia(.45) saturate(.9)}
 :root[data-dna="D"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.6) contrast(1.25) sepia(1) hue-rotate(-35deg) saturate(3.4)}
 :root[data-dna="A"] #realMap .leaflet-tile-pane{filter:invert(1) grayscale(1) brightness(1.75) contrast(1.15) sepia(1) hue-rotate(178deg) saturate(1.9)}
 .route-line{filter:drop-shadow(0 0 6px var(--acc))}
@@ -428,6 +475,7 @@ button{cursor:pointer}
 .mrow{display:flex;justify-content:space-between;align-items:center;gap:6px}
 #mTime{white-space:nowrap;font-variant-numeric:tabular-nums;letter-spacing:.04em}
 @media (max-height:620px){
+  .gt-row{padding:6px 0}.gt-row b{font-size:18px}
   .bigcover{max-height:24vh}
   .pctrl button{width:44px;height:44px}.pctrl #bPlay{width:58px;height:58px}
   .tile{padding:8px 10px;gap:4px}
@@ -552,6 +600,9 @@ button{cursor:pointer}
   .boot{grid-template-columns:1fr;align-content:center}
   #bootHolo{height:36vh}
   .pgrid{grid-template-columns:1fr 1fr}
+  :root[data-dna="N"] .drive{grid-template-areas:none}
+  :root[data-dna="N"] .drive > *{grid-area:auto!important}
+  .gt-dial{height:380px}
 }
 </style>
 
@@ -620,6 +671,14 @@ button{cursor:pointer}
           <div class="stat" id="fuelStat"><span class="label">Autonomie</span><b id="range">--</b></div>
         </div>
         <div class="limit" hidden title="Limitation de vitesse"><b></b></div>
+      </div>
+
+      <div class="panel gt-dial" id="gtRpmP"><svg id="gtRpm" viewBox="0 0 470 470" role="img" aria-label="Compte-tours"></svg></div>
+      <div class="panel gt-dial" id="gtSpdP"><svg id="gtSpd" viewBox="0 0 470 470" role="img" aria-label="Vitesse"></svg></div>
+      <div class="panel gt-info" id="gtInfo">
+        <div class="gt-row"><span class="label">Conso</span><b id="gtCons">--</b></div>
+        <div class="gt-row"><span class="label">Autonomie</span><b id="gtRange">--</b></div>
+        <div class="gt-row"><span class="label">Huile · eau</span><b id="gtTemp">--</b></div>
       </div>
 
       <div class="engine">
@@ -1318,11 +1377,9 @@ const fx = (() => {
     const { ctx, w, h } = B, acc = T['--acc-rgb'];
     dust.forEach(p => {
       p.x = (p.x + p.vx * dt + 1) % 1; p.y = (p.y + p.vy * dt + 1) % 1; p.p += dt;
-      ctx.fillStyle = `rgba(${acc},${0.12 + 0.18 * (0.5 + 0.5 * Math.sin(p.p))})`;
+      ctx.fillStyle = `rgba(${acc},${0.05 + 0.08 * (0.5 + 0.5 * Math.sin(p.p))})`;
       ctx.beginPath(); ctx.arc(p.x * w, p.y * h, p.r, 0, 7); ctx.fill();
     });
-    const y = ((t * 0.06) % 1) * h, g = ctx.createLinearGradient(0, y - 60, 0, y + 2);
-    g.addColorStop(0, 'rgba(0,0,0,0)'); g.addColorStop(1, `rgba(${acc},.07)`); ctx.fillStyle = g; ctx.fillRect(0, y - 60, w, 62);
   }
   return {
     setMode(m) { mode = m; bolt = 6; },
@@ -1398,6 +1455,45 @@ for (let i = 0; i < RPM_SEGS; i++) {
 const rpmSegs = [...$('rpmSegs').children];
 let lastGear = null;
 $('rpmRed').setAttribute('d', arc(172, A0 + SW * 0.9, A0 + SW));
+/* Mode Normal : cadrans à aiguille « Grand Tourisme » */
+function gtDial(svg, max, step, red, unit, withBig) {
+  const ang = v => A0 + SW * v / max, P = (a, r) => [235 + r * Math.cos(a * Math.PI / 180), 235 + r * Math.sin(a * Math.PI / 180)];
+  const id = svg.id;
+  let h = `<defs><radialGradient id="${id}F" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#1a1a1c"/><stop offset="1" stop-color="#08080a"/></radialGradient></defs>
+    <circle cx="235" cy="235" r="222" fill="url(#${id}F)" stroke="#2c2a27" stroke-width="2"/>
+    <circle cx="235" cy="235" r="210" fill="none" stroke="var(--acc)" stroke-width="1" opacity=".55"/>`;
+  for (let i = 0; i <= max / step * 5; i++) {
+    const v = i * step / 5, major = i % 5 === 0, [x0, y0] = P(ang(v), 196), [x1, y1] = P(ang(v), major ? 176 : 188);
+    h += `<line x1="${x0.toFixed(1)}" y1="${y0.toFixed(1)}" x2="${x1.toFixed(1)}" y2="${y1.toFixed(1)}" stroke="${red && v >= red ? '#c9473d' : major ? '#efe9dd' : '#6f6a62'}" stroke-width="${major ? 2.5 : 1.2}"/>`;
+    if (major) { const [tx, ty] = P(ang(v), 152); h += `<text class="gt-num" x="${tx.toFixed(1)}" y="${ty.toFixed(1)}">${max > 1000 ? v / 1000 : v}</text>`; }
+  }
+  h += withBig
+    ? `<text class="gt-big" x="235" y="340">0</text><text class="gt-unit" x="235" y="366">${unit}</text><text class="gt-sub" x="235" y="400"></text>`
+    : `<text class="gt-unit" x="235" y="318">${unit}</text><text class="gt-sub" x="235" y="350"></text>`;
+  h += `<g class="gt-needle" style="transform:rotate(${A0}deg)"><line x1="215" y1="235" x2="405" y2="235" stroke="#f2ede4" stroke-width="4" stroke-linecap="round" style="filter:drop-shadow(0 0 4px rgba(255,255,255,.35))"/></g>
+    <circle cx="235" cy="235" r="11" fill="#1c1b1a" stroke="var(--acc)" stroke-width="2"/>`;
+  svg.innerHTML = h;
+  const needle = svg.querySelector('.gt-needle'), big = svg.querySelector('.gt-big'), sub = svg.querySelector('.gt-sub');
+  return {
+    set(v, bigTxt, subTxt, over) {
+      needle.style.transform = `rotate(${ang(clamp(v || 0, 0, max)).toFixed(1)}deg)`;
+      if (big && big.textContent !== bigTxt) { big.textContent = bigTxt; big.classList.toggle('none', bigTxt === 'NONE'); }
+      if (sub.textContent !== subTxt) sub.textContent = subTxt;
+      sub.classList.toggle('over', !!over);
+    }
+  };
+}
+const gtRpm = gtDial($('gtRpm'), 5000, 1000, 4500, 'TR/MIN ×1000', false);
+const gtSpd = gtDial($('gtSpd'), 220, 20, 0, 'KM/H', true);
+function gtUpdate(s) {
+  const g = s.gear;
+  gtRpm.set(s.rpm, '', s.rpm == null ? 'NONE' : g == null ? (Math.round(s.rpm / 10) * 10).toLocaleString('fr-FR') + ' tr/min' : g === 0 ? 'Point mort' : g + (g === 1 ? 're' : 'e') + ' rapport');
+  const lim = SL.limit;
+  gtSpd.set(s.speed, s.speed == null ? 'NONE' : String(Math.round(s.speed)), lim ? 'Limite ' + lim : '', lim && s.speed > lim + 3);
+  $('gtCons').innerHTML = $('cons').innerHTML;
+  $('gtRange').innerHTML = $('range').innerHTML;
+  $('gtTemp').textContent = s.oil == null || s.coolant == null ? 'NONE' : `${fr(s.oil)}° · ${fr(s.coolant)}°`;
+}
 $('spdTrack').setAttribute('d', arc(104, A0, A0 + SW));
 for (let i = 0; i < 32; i++) { const e = document.createElement('i'); if (i >= 26) e.className = 'hi'; $('seg').append(e); }
 const segs = [...$('seg').children];
@@ -3705,6 +3801,7 @@ function frame(now) {
       $('oil').textContent = fr(s.oil); tile('tOil', (s.oil - 20) / 110, st.oil(s.oil));
       $('batt').textContent = fr(s.batt, 1); tile('tBatt', (s.batt - 11) / 4, st.batt(s.batt));
       $('soot').textContent = fr(s.soot); tile('tDpf', s.soot / 100, st.dpf(s.soot, s.regen));
+      if (dna === 'N') gtUpdate(s);
     } else if (page === 'motor') renderSensors();
     else if (page === 'perf') renderPerf();
     if (page === 'drive' || page === 'nav') {
