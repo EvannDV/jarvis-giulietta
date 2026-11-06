@@ -20,6 +20,7 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JarvisMediaPlugin.class);
         registerPlugin(JarvisVoicePlugin.class);
         registerPlugin(JarvisNotifPlugin.class);
+        registerPlugin(JarvisUpdatePlugin.class);
         super.onCreate(savedInstanceState);
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
         hideSystemBars();

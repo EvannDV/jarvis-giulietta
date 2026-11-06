@@ -60,6 +60,8 @@
     <uses-permission android:name="android.permission.WAKE_LOCK" />
     <!-- Micro pour parler à Jarvis -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- Mise à jour depuis l'appli : ouvrir l'installateur Android avec le nouvel APK -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android 11+ : rendre visible le service de reconnaissance vocale -->
     <queries>

@@ -3,6 +3,7 @@
 - la version web installable (racine du dépôt, publiée par GitHub Pages) ;
 - la version de l'appli Android (dossier www/, emballé par Capacitor).
 Usage : python3 src/build.py"""
+import os
 import pathlib
 import shutil
 import time
@@ -14,7 +15,10 @@ page = (SRC / 'index.html').read_text(encoding='utf-8')
 version = time.strftime('%Y%m%d-%H%M%S')
 
 def head(native):
-    boot = ("window.JARVIS_HOSTED = true; window.JARVIS_NATIVE = true;" if native else
+    build = os.environ.get('GITHUB_RUN_NUMBER', '0')  # numéro de build GitHub Actions = versionCode de l'APK
+    sha = os.environ.get('GITHUB_SHA', '')[:7]
+    stamp = f"window.JARVIS_BUILD = {int(build)}; window.JARVIS_SHA = '{sha}';"
+    boot = (stamp + " window.JARVIS_HOSTED = true; window.JARVIS_NATIVE = true;" if native else
             "window.JARVIS_HOSTED = true;\nif ('serviceWorker' in navigator) addEventListener('load', () => navigator.serviceWorker.register('sw.js'));")
     return '''<!doctype html>
 <html lang="fr">
