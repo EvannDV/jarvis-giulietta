@@ -369,6 +369,13 @@ button{cursor:pointer}
 .gbar{height:8px;background:var(--line);position:relative;margin-top:6px}
 .gbar::after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--muted)}
 .gbar i{position:absolute;top:0;bottom:0;background:var(--acc);box-shadow:0 0 8px rgba(var(--acc-rgb),.7)}
+.chrono.banc > .pstate,.chrono.banc > .ptime,.chrono.banc > .pgrid{display:none}
+.chrono:not(.banc) .dyno{display:none}
+.dyno{display:flex;flex-direction:column;gap:10px;flex:1;min-height:0}
+.dyno-head{display:flex;justify-content:space-between;align-items:center;gap:12px}
+#dyCanvas{width:100%;flex:1;min-height:150px;display:block}
+.dyno .pgrid{margin-top:0}
+.chip.brk{border-color:var(--acc);color:var(--acc);animation:none}
 .records{padding:14px 16px;display:flex;flex-direction:column;gap:12px;overflow:auto}
 .rlist{list-style:none;margin:0;padding:0;display:flex;flex-direction:column}
 .rlist li{display:grid;grid-template-columns:22px 1fr auto;gap:8px;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line)}
@@ -615,6 +622,7 @@ button{cursor:pointer}
   .srow b{font-size:21px}
   .eta b{font-size:21px}
 }
+@media (max-width:1400px){.top{gap:10px}.tab{padding:6px 9px}.brand{gap:7px}}
 /* Écrans d'autoradio plus étroits : on compacte au lieu de cacher */
 @media (max-width:1100px){
   .brand-name{font-size:16px;letter-spacing:.24em}
@@ -661,6 +669,7 @@ button{cursor:pointer}
       <span class="brand-name">J.A.R.V.I.S</span>
       <button class="badge" id="obdBtn" type="button" title="Connecter l'adaptateur OBD Bluetooth">SIM · connecter OBD</button>
       <span class="chip" id="chipRegen" hidden>FAP · régén.</span>
+      <span class="chip brk" id="chipBrk" hidden title="Temps de conduite sans pause">☕ --</span>
     </div>
     <nav class="tabs" role="tablist" aria-label="Pages">
       <button class="tab" role="tab" data-page="drive" aria-selected="true">Conduite</button>
@@ -830,6 +839,7 @@ button{cursor:pointer}
           <div class="seg-ctrl" role="group" aria-label="Type de chrono">
             <button data-mode="0-100" aria-pressed="true">0–100 km/h</button>
             <button data-mode="80-120" aria-pressed="false">80–120 km/h</button>
+            <button data-mode="banc" aria-pressed="false">Banc</button>
           </div>
           <button class="btn" id="launchBtn" type="button">Lancer un essai simulé</button>
         </div>
@@ -839,6 +849,16 @@ button{cursor:pointer}
           <div class="stat"><span class="label">Vitesse</span><b><span id="pfSpeed">0</span><small>km/h</small></b></div>
           <div class="stat"><span class="label">Puissance estimée</span><b><span id="pfPower">0</span><small>ch</small></b></div>
           <div class="stat"><span class="label">Accélération</span><b><span id="pfG">0,00</span><small>g</small></b><div class="gbar"><i id="pfGbar"></i></div></div>
+        </div>
+        <div class="dyno" id="dynoBox">
+          <div class="dyno-head"><div class="pstate" id="dyState">--</div><button class="btn primary" id="dyArm" type="button">Armer le banc</button></div>
+          <canvas id="dyCanvas" aria-label="Courbes de puissance et de couple"></canvas>
+          <div class="pgrid">
+            <div class="stat"><span class="label">Puissance max</span><b id="dyCh">--</b></div>
+            <div class="stat"><span class="label">Couple max</span><b id="dyNm">--</b></div>
+            <div class="stat"><span class="label">Vs 140 ch d'origine</span><b id="dyPct">--</b></div>
+          </div>
+          <p class="note">En 3e, sur une route plate et dégagée, pied au plancher de 1 500 à 4 500 tr/min. Estimation à partir du régime, du poids et de l'aérodynamique : ±10 %. Pointillés : courbes d'origine approximatives.</p>
         </div>
       </div>
       <div class="panel records">
@@ -992,9 +1012,24 @@ class SimSource {
     this.pi = 0; this.pt = 0; this.shiftT = 0; this.demo = 6; this.launch = null;
   }
   startLaunch() { this.launch = { phase: 'stop', t: 0 }; }
+  startPull() { this.launch = null; this.pull = { phase: 'prep', t: 0 }; }
   step(dt) {
     const s = this.s;
     let a, launching = false;
+    if (this.pull) { // banc simulé : 3e calée, couple d'un 2.0 JTDM 140 ch
+      const P = this.pull; P.t += dt; s.gear = 3;
+      if (P.phase === 'prep') { const tg = 1250 / K[3]; s.accel = (tg - s.speed) * 1.2; s.speed += s.accel * dt; if (Math.abs(s.speed - tg) < 0.4) { P.t += 0; if (P.t > 3) { P.phase = 'go'; } } }
+      else {
+        const v = Math.max(1, s.speed / 3.6), Pw = torqueRef(s.rpm) * s.rpm * Math.PI / 30 * DYNO_EFF * (1 + (Math.random() - .5) * 0.03);
+        const am = (Pw / v - 0.5 * 1.2 * DYNO_CDA * v * v - DYNO_CRR * DYNO_M * 9.81) / DYNO_M;
+        s.accel = am * 3.6; s.speed += s.accel * dt;
+        if (s.rpm >= 4650) { this.pull = null; this.pt = 0; }
+      }
+      s.rpm = s.speed * K[3]; s.load = P.phase === 'go' ? 1 : 0.3;
+      s.boost += ((P.phase === 'go' ? 1.4 : 0.3) - s.boost) * Math.min(1, dt * 3);
+      s.lph = 0.55 + s.load * s.rpm / 1000 * 3.2;
+      return s;
+    }
     if (this.launch) {
       const L = this.launch; L.t += dt;
       if (L.phase === 'stop') { a = Math.max(-s.speed * 0.9, -14); if (s.speed < 0.3) { L.phase = 'wait'; L.t = 0; } }
@@ -2093,12 +2128,15 @@ $('diagBtn').addEventListener('click', () => runDiag());
 const perf = { mode: '0-100', armed0: false, r0: null, r80: null, last: { '0-100': null, '80-120': null }, best: store.get('perf', { '0-100': [], '80-120': [] }), prevSpeed: 0, pmax: 0 };
 document.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => {
   perf.mode = b.dataset.mode; document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x === b));
+  document.querySelector('.chrono').classList.toggle('banc', perf.mode === 'banc'); setObdUi();
+  if (perf.mode === 'banc') renderDyno();
 }));
 function setObdUi() {
   const obd = source instanceof ObdSource, live = obd && source.connected;
   $('obdBtn').textContent = live ? 'OBD · ' + source.label : obd ? (source.everConnected ? 'OBD · reconnexion…' : 'OBD · recherche…') : source === sim ? 'SIM · connecter OBD' : 'Connecter OBD';
   $('obdBtn').classList.toggle('live', live);
   $('launchBtn').hidden = source !== sim;
+  $('launchBtn').textContent = perf.mode === 'banc' ? 'Lancer un banc simulé' : 'Lancer un essai simulé';
 }
 function adoptObd(obd) {
   source = obd;
@@ -2135,7 +2173,7 @@ if (NATIVE) {
     adoptObd(obd); obd.startAuto();
   }
 }
-$('launchBtn').addEventListener('click', () => { sim.startLaunch(); say(pick(['Essai lancé. Arrêt complet, puis pied au plancher.', 'Préparation du départ arrêté. Accrochez-vous, monsieur.'])); });
+$('launchBtn').addEventListener('click', () => { if (perf.mode === 'banc') { dynoArm(); sim.startPull(); renderDyno(); say('Banc simulé : je cale la 3e à 1 250 tours, puis pied au plancher.'); return; } sim.startLaunch(); say(pick(['Essai lancé. Arrêt complet, puis pied au plancher.', 'Préparation du départ arrêté. Accrochez-vous, monsieur.'])); });
 function perfFinish(mode, t) {
   const list = perf.best[mode], prevBest = list[0] ? list[0].t : null;
   list.push({ t, d: Date.now() }); list.sort((a, b) => a.t - b.t); list.splice(5);
@@ -2146,6 +2184,7 @@ function perfFinish(mode, t) {
   else say(`${ts} secondes sur le ${mode}. Votre record reste à ${fr(prevBest, 1)}.`);
 }
 function perfTick(s, dt) {
+  dynoTick(s); breakTick(dt);
   // 0-100
   if (s.speed < 0.5) { perf.armed0 = true; perf.r0 = null; }
   else if (perf.armed0 && !perf.r0) { perf.r0 = { t: 0, stall: 0 }; perf.armed0 = false; }
@@ -2169,6 +2208,7 @@ function powerCh(s) {
   return Math.max(0, P / 735.5);
 }
 function renderPerf() {
+  if (perf.mode === 'banc') { renderDyno(); return; }
   const s = S(), mode = perf.mode, run = mode === '0-100' ? perf.r0 : perf.r80;
   const tEl = $('pfTime');
   let txt;
@@ -2189,6 +2229,147 @@ function renderPerf() {
   const f = clamp(g / 0.6, -1, 1) * 50, bar = $('pfGbar');
   bar.style.left = (f >= 0 ? 50 : 50 + f) + '%'; bar.style.width = Math.abs(f) + '%';
 }
+/* ============================================================
+   BANC DE PUISSANCE VIRTUEL : tirage en 3e, puissance = (m·a + aéro + roulement)·v, ramenée au moteur
+   ============================================================ */
+const DYNO_M = 1475, DYNO_CDA = 0.61, DYNO_CRR = 0.012, DYNO_EFF = 0.85; // Giulietta + conducteur, Cx 0,29 × 2,1 m², pertes de transmission 15 %
+// Couple d'origine approximatif d'un 2.0 JTDM 140 ch (repère visuel, pas une donnée constructeur)
+const DYNO_REF = [[1000, 170], [1500, 290], [1750, 320], [2500, 320], [3000, 300], [4000, 246], [4500, 205], [5000, 160]];
+function torqueRef(r) {
+  if (r <= DYNO_REF[0][0]) return DYNO_REF[0][1];
+  for (let i = 1; i < DYNO_REF.length; i++) if (r <= DYNO_REF[i][0]) { const [r0, t0] = DYNO_REF[i - 1], [r1, t1] = DYNO_REF[i]; return t0 + (t1 - t0) * (r - r0) / (r1 - r0); }
+  return DYNO_REF[DYNO_REF.length - 1][1];
+}
+const dyno = { state: 'idle', run: null, last: store.get('dynoLast', null) };
+const median = a => { const b = [...a].sort((x, y) => x - y); return b.length ? b[b.length >> 1] : null; };
+function dynoArm() { dyno.state = 'armed'; dyno.run = null; drawDyno(); }
+function dynoTick(s) {
+  if (dyno.state !== 'armed' && dyno.state !== 'run') return;
+  if (s.speed == null || s.rpm == null) return;
+  const now = performance.now(), ratio = s.speed > 12 ? s.rpm / s.speed : null;
+  if (dyno.state === 'armed') {
+    const full = s.load != null ? s.load > 0.8 : s.accel > 2;
+    if (ratio && s.rpm > 1000 && s.rpm < 2200 && full && s.accel > 0.8) { dyno.state = 'run'; dyno.run = { ratio, pts: [], t0: now, max: s.rpm }; }
+    return;
+  }
+  const R = dyno.run, last = R.pts[R.pts.length - 1];
+  if (!last || last.rpm !== s.rpm || last.v !== s.speed) R.pts.push({ t: (now - R.t0) / 1000, rpm: s.rpm, v: s.speed });
+  R.max = Math.max(R.max, s.rpm);
+  const shifted = ratio == null || Math.abs(ratio / R.ratio - 1) > 0.09;
+  if (shifted || s.rpm < R.max - 120 || s.rpm >= 4700 || now - R.t0 > 25000) dynoFinish();
+}
+function dynoFinish() {
+  const R = dyno.run; dyno.run = null;
+  const pts = R.pts.filter(p => p.rpm <= R.max + 1);
+  const span = pts.length ? Math.max(...pts.map(p => p.rpm)) - Math.min(...pts.map(p => p.rpm)) : 0;
+  if (pts.length < 8 || span < 1200) { dyno.state = 'armed'; say("Mesure trop courte, monsieur. En 3e, gardez le pied au plancher de 1 500 jusqu'à 4 500 tours. Le banc reste armé."); return; }
+  const Rg = median(pts.filter(p => p.v > 10).map(p => p.rpm / p.v)), vs = pts.map(p => p.rpm / Rg / 3.6);
+  const bins = new Map();
+  pts.forEach((p, i) => { // pente vitesse/temps par régression locale (±0,6 s) : lisse le bruit OBD
+    let n = 0, st = 0, sv = 0, stt = 0, stv = 0;
+    pts.forEach((q, j) => { if (Math.abs(q.t - p.t) <= 0.6) { n++; st += q.t; sv += vs[j]; stt += q.t * q.t; stv += q.t * vs[j]; } });
+    if (n < 3) return;
+    const den = n * stt - st * st; if (den <= 0) return;
+    const a = (n * stv - st * sv) / den, v = vs[i];
+    const Pc = (DYNO_M * a + 0.5 * 1.2 * DYNO_CDA * v * v + DYNO_CRR * DYNO_M * 9.81) * v / DYNO_EFF;
+    if (Pc <= 0) return;
+    const k = Math.round(p.rpm / 250) * 250, b = bins.get(k) || { ch: 0, nm: 0, n: 0 };
+    b.ch += Pc / 735.5; b.nm += Pc / (p.rpm * Math.PI / 30); b.n++; bins.set(k, b);
+  });
+  const curve = [...bins.entries()].sort((a, b) => a[0] - b[0]).map(([r, b]) => [r, b.ch / b.n, b.nm / b.n]);
+  if (curve.length < 4) { dyno.state = 'armed'; say("Je n'ai pas assez de points pour tracer la courbe. Réessayez, le banc reste armé."); return; }
+  const pk = curve.reduce((m, c) => c[1] > m[1] ? c : m), tk = curve.reduce((m, c) => c[2] > m[2] ? c : m);
+  dyno.last = { d: Date.now(), ch: Math.round(pk[1]), chRpm: pk[0], nm: Math.round(tk[2]), nmRpm: tk[0], curve: curve.map(c => [c[0], +c[1].toFixed(1), +c[2].toFixed(1)]) };
+  store.set('dynoLast', dyno.last); dyno.state = 'done'; drawDyno();
+  const pct = dyno.last.ch / 140, base = `Banc terminé : ${dyno.last.ch} chevaux à ${dyno.last.chRpm.toLocaleString('fr-FR')} tours, et ${dyno.last.nm} newtons-mètres à ${dyno.last.nmRpm.toLocaleString('fr-FR')} tours. `;
+  say(base + (pct > 1.1 ? "C'est au-dessus des 140 chevaux d'origine : une pente ou un vent arrière, ou bien un moteur reprogrammé ?"
+    : pct >= 0.9 ? "C'est conforme aux 140 chevaux d'origine. Le moteur est en forme, monsieur."
+    : pct >= 0.8 ? "Un peu en dessous des 140 chevaux. Refaites une mesure sur du plat ; si ça se confirme, pensez au filtre à air, au débitmètre ou à la vanne EGR."
+    : "Nettement en dessous des 140 chevaux. Refaites une mesure sur du plat, et si ça se confirme, faites vérifier le turbo, le débitmètre, la vanne EGR et le FAP."));
+}
+function drawDyno() {
+  const c = $('dyCanvas'); if (!c || page !== 'perf' || perf.mode !== 'banc') return;
+  const { ctx, w, h } = fitCanvas(c); ctx.clearRect(0, 0, w, h);
+  const L = 40, Rt = 44, Tp = 10, B = 24, X = r => L + (r - 1000) / 4000 * (w - L - Rt), Yc = ch => Tp + (1 - ch / 180) * (h - Tp - B), Yn = nm => Tp + (1 - nm / 400) * (h - Tp - B);
+  ctx.font = '500 10px "JetBrains Mono", monospace'; ctx.lineWidth = 1; ctx.strokeStyle = T['--line']; ctx.fillStyle = T['--muted'];
+  for (let r = 1000; r <= 5000; r += 500) { ctx.beginPath(); ctx.moveTo(X(r), Tp); ctx.lineTo(X(r), h - B); ctx.stroke(); if (r % 1000 === 0) { ctx.textAlign = 'center'; ctx.fillText(r / 1000 + 'k', X(r), h - 8); } }
+  for (let ch = 0; ch <= 180; ch += 45) { ctx.beginPath(); ctx.moveTo(L, Yc(ch)); ctx.lineTo(w - Rt, Yc(ch)); ctx.stroke(); ctx.textAlign = 'right'; ctx.fillStyle = T['--acc']; ctx.fillText(ch + ' ch', L - 4, Yc(ch) + 3); ctx.textAlign = 'left'; ctx.fillStyle = T['--amber']; ctx.fillText(Math.round(ch / 180 * 400) + ' Nm', w - Rt + 4, Yc(ch) + 3); }
+  const line = (pts, y, col, dash, wd) => { ctx.strokeStyle = col; ctx.lineWidth = wd; ctx.setLineDash(dash); ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(X(p[0]), y(p)) : ctx.moveTo(X(p[0]), y(p))); ctx.stroke(); ctx.setLineDash([]); };
+  const ref = []; for (let r = 1000; r <= 4800; r += 100) ref.push([r, torqueRef(r) * r * Math.PI / 30 / 735.5, torqueRef(r)]);
+  line(ref, p => Yc(p[1]), `rgba(${T['--acc-rgb']},.45)`, [5, 5], 1.5); line(ref, p => Yn(p[2]), 'rgba(255,190,90,.45)', [5, 5], 1.5);
+  const d = dyno.last;
+  if (d && d.curve) {
+    ctx.shadowBlur = 8; ctx.shadowColor = T['--acc']; line(d.curve, p => Yc(p[1]), T['--acc'], [], 3);
+    ctx.shadowColor = T['--amber']; line(d.curve, p => Yn(p[2]), T['--amber'], [], 3); ctx.shadowBlur = 0;
+    ctx.fillStyle = T['--text']; ctx.beginPath(); ctx.arc(X(d.chRpm), Yc(d.ch), 4, 0, 7); ctx.fill(); ctx.beginPath(); ctx.arc(X(d.nmRpm), Yn(d.nm), 4, 0, 7); ctx.fill();
+  }
+  if (dyno.run && dyno.run.pts.length) { const r = dyno.run.pts[dyno.run.pts.length - 1].rpm; ctx.strokeStyle = T['--text']; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(X(r), Tp); ctx.lineTo(X(r), h - B); ctx.stroke(); }
+}
+function renderDyno() {
+  const s = S(), d = dyno.last;
+  $('dyState').textContent = dyno.state === 'run' ? `Mesure en cours… ${Math.round(s.rpm || 0).toLocaleString('fr-FR')} tr/min, gardez le pied au plancher.`
+    : dyno.state === 'armed' ? "Banc armé. En 3e vers 1 500 tr/min, puis pied au plancher jusqu'à 4 500."
+    : d ? `Dernière mesure du ${new Date(d.d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' })}.` : 'Touchez « Armer le banc », puis faites un tirage en 3e.';
+  $('dyArm').textContent = dyno.state === 'armed' || dyno.state === 'run' ? 'Annuler' : 'Armer le banc';
+  $('dyCh').innerHTML = d ? `${d.ch}<small>ch</small>` : '--';
+  $('dyNm').innerHTML = d ? `${d.nm}<small>Nm</small>` : '--';
+  $('dyPct').innerHTML = d ? `${Math.round(d.ch / 140 * 100)}<small>%</small>` : '--';
+  drawDyno();
+}
+$('dyArm').addEventListener('click', () => { if (dyno.state === 'armed' || dyno.state === 'run') { dyno.state = 'idle'; dyno.run = null; say('Banc désarmé.'); } else { dynoArm(); say("Banc armé, monsieur. Passez la 3e vers 1 500 tours, sur du plat, puis pied au plancher jusqu'à 4 500."); } renderDyno(); });
+function openDyno() {
+  goPage('perf'); perf.mode = 'banc';
+  document.querySelectorAll('[data-mode]').forEach(x => x.setAttribute('aria-pressed', x.dataset.mode === 'banc'));
+  document.querySelector('.chrono').classList.add('banc'); setObdUi(); dynoArm(); renderDyno();
+}
+
+/* ============================================================
+   COPILOTE : propose une pause après 2 h de route (1 h la nuit), cherche un arrêt sur le trajet
+   ============================================================ */
+const BRK = { drive: 0, stop: 0, lastAsk: 0, pending: null, saveAcc: 0, busy: false };
+(() => { const b = store.get('brk', null); if (b && Date.now() - b.at < 600000) BRK.drive = b.drive; })();
+const nightHour = () => { const h = new Date().getHours(); return h >= 22 || h < 5; };
+function breakTick(dt) {
+  const v = currentSpeed(); if (v == null) return;
+  if (v > 5) { BRK.drive += dt; BRK.stop = 0; } else { BRK.stop += dt; if (BRK.stop > 600) BRK.drive = 0; }
+  BRK.saveAcc += dt; if (BRK.saveAcc > 30) { BRK.saveAcc = 0; store.set('brk', { drive: BRK.drive, at: Date.now() }); }
+  const chip = $('chipBrk'), show = BRK.drive >= 5400;
+  if (chip.hidden === show) chip.hidden = !show;
+  if (show) chip.textContent = '☕ ' + fmtDur(BRK.drive);
+  if (AI.cfg.breaks === false || BRK.busy) return;
+  const since = (Date.now() - BRK.lastAsk) / 1000;
+  if ((BRK.drive >= 7200 && since > 1800) || (nightHour() && BRK.drive >= 3600 && since > 2700)) proposeBreak(false);
+}
+async function proposeBreak(asked) {
+  BRK.lastAsk = Date.now(); BRK.busy = true;
+  const intro = asked ? (BRK.drive > 600 ? `Vous roulez depuis ${fmtDur(BRK.drive)}. ` : '') : `Vous roulez depuis ${fmtDur(BRK.drive)}${nightHour() ? ', et il se fait tard' : ''}, monsieur. `;
+  try {
+    if (!nav.gps) { say(intro + "Une pause d'un quart d'heure vous ferait du bien. Je n'ai pas votre position pour vous proposer un arrêt."); return; }
+    const onRoute = !!nav.route, motorway = /^A\s?\d/.test(SL.road || '');
+    const find = async type => { const r = await searchPlaces({ type, ou: onRoute ? 'sur_le_trajet' : 'autour', dans_les_km: 60, rayon_km: 8 }); return (r.lieux || []).filter(x => !onRoute || x.km >= 2); };
+    let list = await find(motorway ? 'aire_autoroute' : 'cafe');
+    if (!list.length) list = await find(motorway ? 'cafe' : 'aire_autoroute');
+    if (!list.length) { say(intro + "Je ne trouve pas d'arrêt tout proche. Arrêtez-vous à la prochaine occasion, monsieur."); return; }
+    const x = list[0]; BRK.pending = { numero: x.numero, at: Date.now() };
+    say(intro + `${x.nom}, dans ${onRoute ? x.km : fr(x.km, 1)} kilomètres. ${onRoute ? "Je l'ajoute comme étape ?" : 'Je vous y emmène ?'}`);
+  } catch (e) { say(intro + "Une pause d'un quart d'heure vous ferait du bien."); }
+  finally { BRK.busy = false; }
+}
+function breakLocal(q) {
+  const t = norm(q).replace(/[!.?,]/g, '').replace(/^jarvis /, '').trim();
+  if (BRK.pending && Date.now() - BRK.pending.at < 120000 && (!pendingReply || BRK.pending.at > pendingReply.at)) {
+    if (/^(oui|ok|d accord|vas y|volontiers|ajoute|emmene|go|allez)\b/.test(t)) {
+      const p = BRK.pending; BRK.pending = null;
+      goToPlace({ numero: p.numero, comme: nav.route ? 'etape' : undefined }).then(() => say(nav.route ? "Étape ajoutée. Je vous guide jusqu'à la pause, monsieur." : 'En route pour la pause.')).catch(() => say("Je n'arrive pas à calculer le trajet vers la pause pour le moment, monsieur."));
+      return true;
+    }
+    if (/^(non|pas maintenant|plus tard|ca va|laisse|ne t inquiete)\b/.test(t)) { BRK.pending = null; say('Très bien. Je vous le reproposerai dans une demi-heure.'); return true; }
+  }
+  if (/(je suis fatigue|je fatigue|j ai sommeil|je m endors|pause cafe|faire une pause|ou (faire une pause|m arreter|s arreter)|propose (moi )?une pause|besoin d une pause|trouve (moi )?une (pause|aire))/.test(t)) { proposeBreak(true); return true; }
+  if (/^(lance |ouvre |arme |demarre )?(le )?(banc|banc de puissance|dyno)( de puissance)?$/.test(t)) { openDyno(); say("Banc armé, monsieur. Passez la 3e vers 1 500 tours, sur du plat, puis pied au plancher jusqu'à 4 500."); return true; }
+  return false;
+}
+
 function renderBest() {
   const fmtD = d => new Date(d).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit' });
   [['0-100', 'best0'], ['80-120', 'best80']].forEach(([m, id]) => {
@@ -2705,7 +2886,8 @@ function carState() {
     musique: { titre: v.title, artiste: v.artist, en_lecture: v.playing },
     trajet_en_cours: { distance_km: r1(trip.dist), duree_min: r0(trip.t / 60) },
     carburant: (() => { const a = autonomy(); return a.km == null ? 'niveau non transmis' : { niveau_pct: r0(a.pct), litres: r0(a.litres), autonomie_km: a.km }; })(),
-    limitation_vitesse_kmh: SL.limit, sous_la_pluie: rainNow(),
+    limitation_vitesse_kmh: SL.limit, sous_la_pluie: rainNow(), conduite_sans_pause_min: Math.round(BRK.drive / 60),
+    dernier_banc_puissance: dyno.last ? { ch: dyno.last.ch, a_tr_min: dyno.last.chRpm, couple_nm: dyno.last.nm, couple_a_tr_min: dyno.last.nmRpm, date: new Date(dyno.last.d).toLocaleDateString('fr-FR') } : null,
     analyse_appli: verdicts(), valeurs_normales_2_0_jtdm: REF,
     derniere_alerte: meca.alerts[0] ? { quand: agoTxt(meca.alerts[0].t), alerte: meca.alerts[0].titre, detail: meca.alerts[0].texte } : null
   };
@@ -2824,6 +3006,7 @@ function openSettings(msg) {
     <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
     <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
     <label class="chk"><input type="checkbox" id="sSounds"> Sons du mode Sport (coup de gaz à l'activation)</label>
+    <label class="chk"><input type="checkbox" id="sBreaks"> Copilote : me proposer une pause (après 2 h de route, 1 h la nuit)</label>
     <label class="chk"><input type="checkbox" id="sMsg2"> Lire mes messages à voix haute (WhatsApp, SMS…)</label>
     <div class="row"><button class="btn primary" id="sSave" type="button">Enregistrer</button><button class="btn" id="sTest" type="button">Tester</button><button class="btn" id="sBriefNow" type="button">Briefing</button></div>
     <p class="note" id="sMsg">${esc(msg || '')}</p>
@@ -2842,9 +3025,9 @@ function openSettings(msg) {
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
-  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked };
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
     if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
     configureMessages();
@@ -3836,6 +4019,7 @@ function isQuickCommand(q) {
 }
 function ask(q) {
   q = q.trim(); if (!q) return; addMsg(q, true);
+  if (breakLocal(q)) return;
   if (messagesLocal(q)) return;
   const g = galleryLocal(q); if (g) { setTimeout(() => say(g), 150); return; }
   if (!AI.cfg.key || isQuickCommand(q)) { setTimeout(() => { const a = answer(q); if (a) say(a); }, 250); return; }
