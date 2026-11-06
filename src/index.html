@@ -2,7 +2,7 @@
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Saira+Semi+Condensed:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Saira+Semi+Condensed:wght@400;500;600&display=swap">
 <style>
 /* Layout : écran d'autoradio paysage. En-tête avec 4 pages + DNA, zone de page au centre, console Jarvis en bas.
    La fenêtre holographique s'ouvre toujours sur la colonne de gauche (au-dessus de la vitesse) pour laisser la carte visible. */
@@ -207,6 +207,53 @@ button{cursor:pointer}
 .gt-row:last-child{border-bottom:0}
 .gt-row b{font-family:var(--f-display);font-weight:400;font-size:21px;font-variant-numeric:tabular-nums;white-space:nowrap}
 .gt-row b small{font-size:12px;color:var(--muted);margin-left:3px}
+/* ===== MODE PLUIE (DNA A) : verre mouillé, radar pluie, distance de sécurité ===== */
+.wx-spd,.wx-col{display:none}
+:root[data-dna="A"]{--ok:#7dffc4;--amber:#ffc35a;--red:#ff6b6b}
+:root[data-dna="A"] body{background:radial-gradient(ellipse 90% 60% at 50% 110%,#0c2340 0%,#030a14 60%) fixed,#030a14}
+:root[data-dna="A"] body::after{display:none}
+:root[data-dna="A"] .panel{background:linear-gradient(180deg,rgba(20,44,78,.42),rgba(6,16,30,.6));border:1px solid rgba(160,210,255,.22);border-radius:16px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);box-shadow:inset 0 1px 0 rgba(255,255,255,.08),0 10px 30px rgba(0,0,0,.35)}
+:root[data-dna="A"] .panel::before,:root[data-dna="A"] .panel::after{display:none}
+:root[data-dna="A"] .turn,:root[data-dna="A"] .eta{background:rgba(4,12,24,.72);border:1px solid rgba(160,210,255,.25);border-radius:12px;backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+:root[data-dna="A"] .icon-btn,:root[data-dna="A"] .btn,:root[data-dna="A"] .badge{border-radius:10px}
+:root[data-dna="A"] .dna{border-radius:10px;overflow:hidden}
+:root[data-dna="A"] .dna button[aria-pressed="true"]{background:linear-gradient(180deg,#bfe4ff,#6fb6f2)}
+:root[data-dna="A"] .drive{grid-template-columns:minmax(0,1.1fr) minmax(0,.95fr) minmax(0,1.15fr);grid-template-areas:"spd col map"}
+:root[data-dna="A"] .drive > .cluster,:root[data-dna="A"] .drive > .engine,:root[data-dna="A"] .limit.lmap{display:none!important}
+:root[data-dna="A"] .drive > .mapp{grid-area:map}
+:root[data-dna="A"] .wx-spd{display:flex;grid-area:spd;flex-direction:column;gap:10px;padding:14px 16px;min-height:0;overflow:hidden}
+:root[data-dna="A"] .wx-col{display:flex;grid-area:col;flex-direction:column;gap:10px;min-height:0}
+.wx-chips{display:flex;gap:8px;flex-wrap:wrap}
+.wx-chip{display:inline-flex;align-items:center;gap:6px;padding:4px 10px;border-radius:999px;font-family:var(--f-mono);font-size:10.5px;letter-spacing:.1em;text-transform:uppercase;border:1px solid currentColor;white-space:nowrap}
+.wx-dial{position:relative;flex:1;min-height:0;display:grid;place-items:center}
+.wx-dial svg{width:100%;height:100%;max-height:100%;display:block}
+.wx-arc{transition:stroke-dasharray .25s linear}
+.wx-signw{position:absolute;right:2px;top:2px;display:flex;flex-direction:column;align-items:center;gap:6px}
+.wx-sign{width:70px;height:70px;border-radius:50%;background:#fff;border:8px solid #d0202e;display:grid;place-items:center;font-family:var(--f-display);font-weight:700;font-size:26px;color:#111;box-shadow:0 0 0 3px rgba(159,211,255,.5),0 0 24px rgba(159,211,255,.5)}
+.wx-sign.over{animation:limitPulse .6s ease-in-out infinite alternate}
+.wx-dry{text-decoration:line-through;opacity:.8}
+.wx-sdist{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center}
+.wx-road{position:relative;height:30px;border-radius:15px;background:linear-gradient(90deg,rgba(125,255,196,.25),rgba(125,255,196,.08));border:1px solid rgba(125,255,196,.45)}
+.wx-road::after{content:"";position:absolute;left:12px;right:12px;top:50%;border-top:2px dashed rgba(230,242,255,.35)}
+.wx-road span{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);font-family:var(--f-display);font-weight:600;font-size:15px;background:#0b2036;padding:0 8px;border-radius:8px;z-index:1;color:var(--ok);white-space:nowrap}
+.wx-road.warn{background:linear-gradient(90deg,rgba(255,195,90,.25),rgba(255,195,90,.08));border-color:rgba(255,195,90,.55)}
+.wx-road.warn span{color:var(--amber)}
+.wx-alert{position:absolute;left:14px;right:14px;top:30%;border-radius:16px;padding:16px 18px;background:linear-gradient(180deg,rgba(60,25,10,.9),rgba(30,12,6,.94));border:1px solid var(--amber);box-shadow:0 0 40px rgba(255,195,90,.35);z-index:4;display:flex;flex-direction:column;gap:8px}
+.wx-alert h3{margin:0;font-family:var(--f-display);font-size:24px;color:var(--amber);letter-spacing:.06em}
+.wx-alert p{margin:0;font-size:16px;line-height:1.4}
+.wx-alert b{font-family:var(--f-display);font-size:20px;color:#fff}
+.wx-card{padding:12px 14px;display:flex;flex-direction:column;gap:10px;min-height:0}
+.wx-bars{display:grid;grid-template-columns:repeat(12,1fr);gap:4px;align-items:end;height:74px}
+.wx-bars i{display:block;border-radius:3px 3px 1px 1px;background:linear-gradient(180deg,#bfe4ff,#3f86c9);min-height:6px}
+.wx-bars i.h{background:linear-gradient(180deg,#ffd27a,#e08a2e)}
+.wx-bars i.s{background:linear-gradient(180deg,#ff9a9a,#d0404a)}
+.wx-axis{display:flex;justify-content:space-between;font-family:var(--f-mono);font-size:10px;color:var(--muted)}
+.wx-sum{font-size:14px;line-height:1.4}
+.wx-mini{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.wx-mini div{border:1px solid rgba(150,200,255,.16);border-radius:12px;padding:8px 10px;display:flex;flex-direction:column;gap:2px;min-width:0}
+.wx-mini b{font-family:var(--f-display);font-size:22px;font-weight:600;white-space:nowrap}
+.wx-mini b small{font-size:12px;color:var(--muted);margin-left:2px;font-weight:400}
+@media (max-height:620px){.wx-bars{height:48px}.wx-mini b{font-size:18px}.wx-mini div{padding:6px 8px}.wx-sign{width:56px;height:56px;font-size:21px;border-width:6px}}
 /* ===== MODE SPORT (DNA D) : combiné course, rapport géant, rampe LED, effets ===== */
 :root[data-dna="D"] .drive{grid-template-columns:1.6fr .78fr 1fr}
 :root[data-dna="D"] .panel{background:linear-gradient(180deg,rgba(var(--panel-rgb),.62),rgba(var(--panel2-rgb),.78))}
@@ -603,6 +650,8 @@ button{cursor:pointer}
   :root[data-dna="N"] .drive{grid-template-areas:none}
   :root[data-dna="N"] .drive > *{grid-area:auto!important}
   .gt-dial{height:380px}
+  :root[data-dna="A"] .drive{grid-template-areas:none}
+  .wx-spd{min-height:520px}
 }
 </style>
 
@@ -679,6 +728,34 @@ button{cursor:pointer}
         <div class="gt-row"><span class="label">Conso</span><b id="gtCons">--</b></div>
         <div class="gt-row"><span class="label">Autonomie</span><b id="gtRange">--</b></div>
         <div class="gt-row"><span class="label">Huile · eau</span><b id="gtTemp">--</b></div>
+      </div>
+
+      <div class="panel wx-spd" id="wxSpdP">
+        <div class="wx-chips" id="wxChips"></div>
+        <div class="wx-dial">
+          <svg viewBox="0 0 380 330" role="img" aria-label="Vitesse sous la pluie">
+            <defs><linearGradient id="wxGa" x1="0" x2="1"><stop offset="0" stop-color="#3f86c9"/><stop offset="1" stop-color="#bfe4ff"/></linearGradient><filter id="wxGl"><feGaussianBlur stdDeviation="4" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>
+            <circle cx="190" cy="170" r="150" fill="none" stroke="rgba(150,200,255,.12)" stroke-width="18" stroke-dasharray="706 1000" transform="rotate(135 190 170)" stroke-linecap="round"/>
+            <circle id="wxArc" class="wx-arc" cx="190" cy="170" r="150" fill="none" stroke="url(#wxGa)" stroke-width="18" stroke-dasharray="0 1000" transform="rotate(135 190 170)" stroke-linecap="round" filter="url(#wxGl)"/>
+            <circle id="wxMark" cx="190" cy="170" r="150" fill="none" stroke="#ffc35a" stroke-width="18" stroke-dasharray="3 1000" transform="rotate(135 190 170)"/>
+            <text id="wxLimTxt" x="190" y="12" text-anchor="middle" font-family="JetBrains Mono,ui-monospace,monospace" font-size="10" fill="#ffc35a" letter-spacing="2"></text>
+            <circle cx="190" cy="170" r="112" fill="none" stroke="rgba(150,200,255,.18)" stroke-width="1" stroke-dasharray="2 6"/>
+            <text id="wxSpd" x="190" y="190" text-anchor="middle" font-family="Chakra Petch,Segoe UI,system-ui,sans-serif" font-weight="300" font-size="112" fill="var(--text)">0</text>
+            <text x="190" y="222" text-anchor="middle" font-family="JetBrains Mono,ui-monospace,monospace" font-size="13" letter-spacing="5" fill="var(--muted)">KM/H</text>
+            <text id="wxRpm" x="190" y="256" text-anchor="middle" font-family="JetBrains Mono,ui-monospace,monospace" font-size="14" fill="var(--acc)"></text>
+          </svg>
+          <div class="wx-signw" id="wxSignW" hidden><div class="wx-sign" id="wxSign">110</div><span class="label wx-dry" id="wxDry"></span></div>
+        </div>
+        <div class="wx-sdist"><span class="label">Distance<br>de sécurité</span><div class="wx-road" id="wxRoad"><span id="wxDist">--</span></div><span class="label" id="wxDistL" style="color:var(--ok)">doublée</span></div>
+        <div class="wx-alert" id="wxAlert" hidden><span class="label" style="color:var(--amber)" id="wxAlertK">Alerte</span><h3>RISQUE D'AQUAPLANING</h3><p id="wxAlertP"></p></div>
+      </div>
+      <div class="wx-col">
+        <div class="panel wx-card"><div class="ptitle"><span class="label">Radar pluie · 3 h</span><span class="label" id="wxMax"></span></div>
+          <div class="wx-bars" id="wxBars"></div><div class="wx-axis" id="wxAxis"></div>
+          <span class="wx-sum" id="wxSum">Radar en attente de la position GPS…</span></div>
+        <div class="panel wx-card"><span class="label">Visibilité &amp; chaussée</span>
+          <div class="wx-mini"><div><span class="label">Ext.</span><b id="wxExt">--</b></div><div><span class="label">Verglas</span><b id="wxIce">--</b></div><div><span class="label">Vent</span><b id="wxWind">--</b></div></div>
+          <div class="wx-mini"><div><span class="label">Eau</span><b id="wxCool">--</b></div><div><span class="label">Huile</span><b id="wxOil">--</b></div><div><span class="label">Batterie</span><b id="wxBatt">--</b></div></div></div>
       </div>
 
       <div class="engine">
@@ -1252,7 +1329,8 @@ $('nightBtn').addEventListener('click', () => {
 const fxState = { burst: 0, flash: 0 }; // burst : accélération hyperespace ; flash : éclair de passage
 const fx = (() => {
   const back = $('fxBack'), front = $('fxFront'), rnd = Math.random;
-  let mode = 'N', t = 0, bolt = 14;
+  let mode = 'N', t = 0, bolt = 14, storm = false, rainLvl = 0;
+  const wipe = { t: 2.5, p: null };
   const newStreak = init => ({ a: rnd() * Math.PI * 2, r: init ? rnd() : 0.03 + rnd() * 0.06, v: 0.5 + rnd() * 1.3, w: 0.6 + rnd() * 1.6 });
   const streaks = Array.from({ length: 120 }, () => newStreak(true));
   const rain = Array.from({ length: 260 }, () => ({ x: rnd() * 1.3, y: rnd(), l: 0.03 + rnd() * 0.06, v: 1.1 + rnd() * 1.3, a: 0.12 + rnd() * 0.33 }));
@@ -1354,6 +1432,7 @@ const fx = (() => {
         if (!lt || d.y - lt[1] > 0.004) { d.trail.push([d.x + (rnd() - .5) * 0.0015, d.y]); if (d.trail.length > 60) d.trail.shift(); }
       }
       if (d.y > 1.05) Object.assign(d, newDrop(), { y: -0.02 });
+      if (d.hide > t) return;
       const x = d.x * F.w, y = d.y * F.h, r = d.r;
       if (d.trail.length > 1) {
         f.strokeStyle = `rgba(${acc},.13)`; f.lineWidth = r * 0.55; f.lineCap = 'round'; f.beginPath();
@@ -1367,7 +1446,27 @@ const fx = (() => {
     if (rnd() < dt * 0.8) drops[Math.floor(rnd() * drops.length)].slide = true;
     // éclairs lointains
     bolt -= dt;
-    if (bolt < -1.2) bolt = 18 + rnd() * 25;
+    // essuie-glace : balayage aller-retour qui nettoie les gouttes, cadence selon l'intensité de la pluie
+    const period = rainLvl >= 4 || storm ? 3.5 : rainLvl > 0.3 ? 6 : 10;
+    if (wipe.p == null) { wipe.t -= dt; if (wipe.t <= 0) wipe.p = 0; }
+    if (wipe.p != null) {
+      wipe.p += dt / 1.3;
+      const k = wipe.p < 0.5 ? wipe.p * 2 : 2 - wipe.p * 2, ang = -1.25 + 2.5 * (0.5 - 0.5 * Math.cos(k * Math.PI));
+      const px = F.w / 2, py = F.h * 1.15, L = Math.hypot(F.w / 2, py) * 1.04;
+      drops.forEach(d => {
+        if (d.hide > t) return;
+        const a = Math.atan2(d.x * F.w - px, py - d.y * F.h);
+        if (Math.abs(a - ang) < 0.07) Object.assign(d, newDrop(), { hide: t + 0.5 + rnd() * period });
+      });
+      f.save(); f.translate(px, py); f.rotate(ang);
+      const sd = wipe.p < 0.5 ? -1 : 1, tr = f.createLinearGradient(0, 0, sd * 54, 0); tr.addColorStop(0, `rgba(${acc},.2)`); tr.addColorStop(1, `rgba(${acc},0)`);
+      f.fillStyle = tr; f.fillRect(sd < 0 ? -54 : 4, -L, 50, L - F.h * 0.1);
+      f.fillStyle = 'rgba(12,16,22,.9)'; f.fillRect(-5, -L, 10, L - F.h * 0.1);
+      f.fillStyle = 'rgba(200,230,255,.45)'; f.fillRect(5, -L, 2, L - F.h * 0.1);
+      f.restore();
+      if (wipe.p >= 1) { wipe.p = null; wipe.t = period; }
+    }
+    if (bolt < -1.2) bolt = storm ? 5 + rnd() * 8 : 18 + rnd() * 25;
     if (bolt < 0) {
       const b = -bolt, lv = b < 0.08 ? 1 : b < 0.18 ? 0.1 : b < 0.3 ? 0.75 : Math.max(0, 0.75 - (b - 0.3) * 1.2);
       f.fillStyle = `rgba(210,230,255,${lv * 0.16})`; f.fillRect(0, 0, F.w, F.h);
@@ -1383,6 +1482,7 @@ const fx = (() => {
   }
   return {
     setMode(m) { mode = m; bolt = 6; },
+    setRain(level, isStorm) { rainLvl = level || 0; storm = !!isStorm; },
     draw(dtIn, s) {
       const dt = reduceMotion ? 0 : dtIn; t += dt;
       const B = size(back), F = size(front);
@@ -3228,6 +3328,84 @@ async function routeWeather() {
 }
 
 /* ============================================================
+   MODE PLUIE : radar 3 h par quart d'heure (Open-Meteo, sans clé), aquaplaning
+   ============================================================ */
+const RADAR = { at: 0, busy: false, storm: false, now: 0, max: 0, temp: null, wind: null, alertAt: 0, chips: '' };
+const hm = iso => iso.slice(11, 16);
+async function fetchRadar(force) {
+  if (RADAR.busy || (!force && Date.now() - RADAR.at < 600000)) return;
+  const p = lastPosition(); if (!p) return;
+  RADAR.busy = true; RADAR.at = Date.now();
+  try {
+    const u = `https://api.open-meteo.com/v1/forecast?latitude=${p.lat.toFixed(3)}&longitude=${p.lon.toFixed(3)}&current=temperature_2m,precipitation,weather_code,wind_speed_10m&minutely_15=precipitation,weather_code&forecast_days=2&timezone=auto`;
+    const j = await fetch(u).then(r => r.json());
+    const m = j.minutely_15, c = j.current; if (!m || !m.time || !c) throw new Error('radar indisponible');
+    let i0 = 0; for (let i = 0; i < m.time.length; i++) if (m.time[i] <= c.time) i0 = i;
+    const q = m.time.slice(i0, i0 + 12).map((t, k) => ({ t, mm: (m.precipitation[i0 + k] || 0) * 4, code: m.weather_code[i0 + k] || 0 }));
+    RADAR.temp = c.temperature_2m; RADAR.wind = c.wind_speed_10m;
+    RADAR.now = Math.max(q[0] ? q[0].mm : 0, (c.precipitation || 0) * 4);
+    RADAR.max = Math.max(0, ...q.map(x => x.mm));
+    RADAR.storm = c.weather_code >= 95 || q.some(x => x.code >= 95);
+    fx.setRain(RADAR.now, RADAR.storm);
+    $('wxBars').innerHTML = q.map(x => `<i class="${x.code >= 95 ? 's' : x.mm >= 4 ? 'h' : ''}" style="height:${Math.max(6, Math.min(100, x.mm / 8 * 100)).toFixed(0)}%" title="${hm(x.t)} · ${fr(x.mm, 1)} mm/h"></i>`).join('');
+    const end = new Date(new Date(q[q.length - 1].t).getTime() + 900000);
+    $('wxAxis').innerHTML = [0, 4, 8].map(k => q[k] ? `<span>${hm(q[k].t)}</span>` : '').join('') + `<span>${String(end.getHours()).padStart(2, '0')}:${String(end.getMinutes()).padStart(2, '0')}</span>`;
+    const mx = $('wxMax'); mx.textContent = fr(RADAR.max, 1) + ' mm/h'; mx.style.color = RADAR.storm ? 'var(--red)' : RADAR.max >= 4 ? 'var(--amber)' : 'var(--acc)';
+    const a = q.findIndex(x => x.mm >= 0.3);
+    if (a < 0) $('wxSum').textContent = 'Pas de pluie prévue dans les 3 prochaines heures.';
+    else {
+      let b = a; while (b + 1 < q.length && q[b + 1].mm >= 0.3) b++;
+      const run = q.slice(a, b + 1), st = run.some(x => x.code >= 95), hv = run.some(x => x.mm >= 4);
+      const kind = st ? '<b style="color:var(--red)">Orage</b>' : hv ? '<b style="color:var(--amber)">Forte pluie</b>' : '<b style="color:var(--acc)">Pluie</b>';
+      const fin = b + 1 < q.length ? q[b + 1].t.slice(11, 16).replace(':', ' h ') : null;
+      $('wxSum').innerHTML = a === 0 ? (fin ? `${kind} en cours, jusqu'à ${fin}.` : `${kind} en cours, pendant au moins 3 h.`) : `${kind} de ${hm(q[a].t).replace(':', ' h ')} à ${fin || 'plus de 3 h'}.`;
+    }
+  } catch (e) { $('wxSum').textContent = 'Radar pluie indisponible pour le moment.'; RADAR.at = Date.now() - 480000; }
+  finally { RADAR.busy = false; }
+}
+function rainUpdate(s) {
+  if (!lastPosition()) $('wxSum').textContent = 'Radar en attente de la position GPS…';
+  fetchRadar();
+  const v = s.speed;
+  $('wxSpd').textContent = v == null ? 'NONE' : Math.round(v);
+  $('wxSpd').setAttribute('font-size', v == null ? 56 : 112);
+  $('wxRpm').textContent = s.rpm == null ? '' : (s.gear ? s.gear + (s.gear === 1 ? 're' : 'e') + ' · ' : '') + (Math.round(s.rpm / 10) * 10).toLocaleString('fr-FR') + ' tr/min';
+  $('wxArc').setAttribute('stroke-dasharray', `${(706 * clamp((v || 0) / 180, 0, 1)).toFixed(1)} 1000`);
+  const lim = SL.limit, dry = SL.raw, over = lim && v > lim + 3;
+  $('wxMark').style.opacity = lim ? 1 : 0;
+  if (lim) $('wxMark').setAttribute('stroke-dashoffset', (-706 * clamp(lim / 180, 0, 1)).toFixed(1));
+  $('wxLimTxt').textContent = lim ? (dry && dry !== lim ? 'LIMITE PLUIE ' : 'LIMITE ') + lim : '';
+  $('wxSignW').hidden = !lim;
+  if (lim) { $('wxSign').textContent = lim; $('wxSign').classList.toggle('over', !!over); $('wxDry').textContent = dry && dry !== lim ? dry + ' sur sec' : ''; }
+  const ext = s.ext != null ? s.ext : RADAR.temp, heavy = RADAR.now >= 4 || RADAR.storm, secs = heavy ? 5 : 4;
+  const chips = [['💧 Chaussée mouillée', 'var(--acc)'], ['Adhérence réduite', 'var(--amber)']];
+  if (RADAR.storm) chips.push(['⚡ Orage', 'var(--red)']);
+  if (ext != null && ext <= 3) chips.push(['❄ Verglas possible', 'var(--red)']);
+  const ch = chips.map(([t, c]) => `<span class="wx-chip" style="color:${c}">${t}</span>`).join('');
+  if (ch !== RADAR.chips) { RADAR.chips = ch; $('wxChips').innerHTML = ch; }
+  $('wxDist').textContent = v == null ? 'NONE' : `${Math.round(v / 3.6 * secs)} m · ${secs} s`;
+  $('wxRoad').classList.toggle('warn', heavy);
+  $('wxDistL').textContent = heavy ? '× 2,5' : 'doublée'; $('wxDistL').style.color = heavy ? 'var(--amber)' : 'var(--ok)';
+  $('wxExt').innerHTML = ext == null ? 'NONE' : `${fr(ext)}<small>°C</small>`;
+  const ice = ext == null ? null : ext <= 0 ? ['élevé', 'var(--red)'] : ext <= 3 ? ['modéré', 'var(--amber)'] : ['faible', 'var(--ok)'];
+  const iceEl = $('wxIce'); iceEl.textContent = ice ? ice[0] : 'NONE'; iceEl.style.color = ice ? ice[1] : ''; iceEl.style.fontSize = '18px';
+  $('wxWind').innerHTML = RADAR.wind == null ? '--' : `${Math.round(RADAR.wind)}<small>km/h</small>`;
+  $('wxCool').innerHTML = s.coolant == null ? 'NONE' : `${fr(s.coolant)}<small>°C</small>`;
+  $('wxOil').innerHTML = s.oil == null ? 'NONE' : `${fr(s.oil)}<small>°C</small>`;
+  $('wxBatt').innerHTML = s.batt == null ? 'NONE' : `${fr(s.batt, 1)}<small>V</small>`;
+  // aquaplaning : pluie intense ou orage et vitesse élevée
+  const intense = RADAR.now >= 6 || RADAR.storm, al = $('wxAlert');
+  if (intense && v > 90) {
+    if (al.hidden) {
+      al.hidden = false;
+      $('wxAlertK').textContent = RADAR.storm ? 'Alerte · orage' : 'Alerte · pluie intense';
+      $('wxAlertP').innerHTML = `Pluie ${RADAR.storm ? "d'orage" : 'intense'} (${fr(RADAR.now, 0)} mm/h). Vitesse conseillée <b>90 km/h</b>, gardez 5 secondes avec le véhicule devant.`;
+    }
+    if (Date.now() - RADAR.alertAt > 600000) { RADAR.alertAt = Date.now(); say("Risque d'aquaplaning, monsieur. Je vous conseille 90 km/h et 5 secondes de distance."); }
+  } else if (!al.hidden && (!intense || v < 85)) al.hidden = true;
+}
+
+/* ============================================================
    AUTONOMIE (niveau de carburant OBD, PID 2F)
    ============================================================ */
 const fuelWarn = { k80: false, k40: false, trip: null };
@@ -3802,6 +3980,7 @@ function frame(now) {
       $('batt').textContent = fr(s.batt, 1); tile('tBatt', (s.batt - 11) / 4, st.batt(s.batt));
       $('soot').textContent = fr(s.soot); tile('tDpf', s.soot / 100, st.dpf(s.soot, s.regen));
       if (dna === 'N') gtUpdate(s);
+      else if (dna === 'A') rainUpdate(s);
     } else if (page === 'motor') renderSensors();
     else if (page === 'perf') renderPerf();
     if (page === 'drive' || page === 'nav') {
