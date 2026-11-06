@@ -89,7 +89,7 @@ Tous gratuits pour un usage personnel :
 - Photos libres : Wikimedia Commons ; résumés : Wikipédia
 - Prix des carburants : data.economie.gouv.fr (flux officiel, sans clé)
 - Intelligence : API Gemini de Google (votre clé)
-- Carte affichée avec Leaflet (inclus dans `lib/`)
+- Carte 3D affichée avec MapLibre GL (inclus dans `lib/`), tuiles vectorielles OpenFreeMap (gratuites, sans clé)
 
 Sans réseau, le tableau de bord marche normalement. La carte affiche les zones déjà vues, mais la recherche d'itinéraire a besoin d'Internet.
 
