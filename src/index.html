@@ -1330,9 +1330,9 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
    DNA + NUIT + PLUIE
    ============================================================ */
 const DNA_INFO = {
-  D: { tag: 'DYNAMIC', say: ['Mode Dynamic. Réponse moteur au maximum, je garde un œil sur les températures.', 'Dynamic engagé. Faites-vous plaisir, monsieur, mais pas sur moteur froid.'] },
-  N: { tag: 'NATURAL', say: ['Mode Natural. Retour au confort.', 'Natural. On reprend un rythme raisonnable.'] },
-  A: { tag: 'ALL-WEATHER', say: ['Mode pluie. Je double les distances de sécurité conseillées.', 'All-weather activé. Chaussée glissante probable, prudence dans les ronds-points.'] }
+  D: { tag: 'DYNAMIC', say: ['Dynamic. Faites-vous plaisir, je surveille les températures.', 'On passe aux choses sérieuses. Pas trop fort à froid, quand même.', 'Mode Dynamic engagé. Je vous sens d\'humeur joueuse.'] },
+  N: { tag: 'NATURAL', say: ['Retour au confort.', 'On reprend un rythme plus tranquille.', 'Mode Natural, on souffle un peu.'] },
+  A: { tag: 'ALL-WEATHER', say: ['Mode pluie. Je double les distances de sécurité.', 'Route mouillée, on lève un peu le pied. Prudence dans les ronds-points.', 'All-weather. Je garde un œil sur le radar pluie pour vous.'] }
 };
 let dna = store.get('dna', 'N');
 function setDna(m, quiet) {
@@ -2682,7 +2682,7 @@ $('holoClose').addEventListener('click', closeHolo);
 const logEl = $('log'), core = $('core');
 let voiceOn = !!store.get('voice2', true); // voix activée par défaut : Jarvis répond à voix haute
 let speakUntil = 0; // réponses lues à voix haute pendant 20 s après une question posée à la voix
-const speech = { speaking: false, followUntil: 0 }; // followUntil : Jarvis vient de poser une question, on écoute la réponse sans « Jarvis »
+const speech = { speaking: false, followUntil: 0, lastEnd: 0 }; let micRef = null; // followUntil : Jarvis vient de poser une question, on écoute la réponse sans « Jarvis »
 const stamp = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 function addMsg(text, me) {
   const m = document.createElement('div'); m.className = 'msg' + (me ? ' me' : '');
@@ -2702,24 +2702,48 @@ function addMsg(text, me) {
   tick();
   if (/\?\s*$/.test(text)) speech.followUntil = Date.now() + 12000;
   if (voiceOn || Date.now() < speakUntil) speak(text);
+  if (micRef && micRef.awaitAnswer) micRef.awaitAnswer = false; // la réponse est arrivée : l'écoute reprendra quand Jarvis aura fini de parler
 }
 const say = t => addMsg(t);
 function speak(text) { speakAsync(text); }
 // Parle et se résout à la fin : pendant ce temps, l'écoute du micro est suspendue (Jarvis ne s'entend pas lui-même)
+// Texte écrit → texte à dire : unités en toutes lettres, sans abréviations qu'une voix lit mal
+function speechText(t) {
+  return String(t)
+    .replace(/\s?°\s?C\b/g, ' degrés').replace(/\s?°/g, ' degrés')
+    .replace(/\bkm\/h\b/gi, ' kilomètres-heure').replace(/\btr\/min\b/gi, ' tours minute').replace(/\bL\/100\b/g, ' litres aux cent').replace(/\bL\/h\b/g, ' litres par heure')
+    .replace(/(\d)\s?km\b/g, '$1 kilomètres').replace(/(\d)\s?m\b/g, '$1 mètres').replace(/(\d)\s?h\s?(\d\d)\b/g, '$1 heures $2').replace(/(\d)\s?(min|mn)\b/g, '$1 minutes')
+    .replace(/(\d)\s?s\b/g, '$1 secondes').replace(/(\d)\s?V\b/g, '$1 volts').replace(/(\d)\s?ch\b/g, '$1 chevaux').replace(/(\d)\s?Nm\b/g, '$1 newtons-mètres')
+    .replace(/\s?%/g, ' pour cent').replace(/\s?€/g, ' euros').replace(/\bFAP\b/g, 'filtre à particules').replace(/\bOBD\b/g, 'O B D')
+    .replace(/[«»"*_#`]/g, '').replace(/\s·\s/g, ', ').replace(/…/g, '.').replace(/\s{2,}/g, ' ').trim();
+}
+let nativeVoice = null; // index de la voix française la plus naturelle (voix « réseau » Google si dispo)
+async function pickNativeVoice() {
+  try {
+    const tts = window.Capacitor.Plugins.TextToSpeech, r = await tts.getSupportedVoices(), vs = (r && r.voices) || [];
+    const score = v => (/^fr[-_]FR/i.test(v.lang) ? 4 : /^fr/i.test(v.lang) ? 2 : -99) + (/network|online|neural|wavenet/i.test((v.voiceURI || '') + v.name) ? 3 : 0) + (v.localService === false ? 1 : 0);
+    let best = -1, bs = 0; vs.forEach((v, i) => { const sc = score(v); if (sc > bs) { bs = sc; best = i; } });
+    if (best >= 0) nativeVoice = best;
+  } catch (e) {}
+}
+if (NATIVE) setTimeout(pickNativeVoice, 1500);
 function speakAsync(text) {
+  text = speechText(text);
   return new Promise(done => {
-    let ended = false; const finish = () => { if (ended) return; ended = true; speech.speaking = false; done(); };
+    let ended = false; const finish = () => { if (ended) return; ended = true; speech.speaking = false; speech.lastEnd = Date.now(); done(); };
     try {
       speech.speaking = true;
+      if (micRef && micRef.wake && micRef.busy && VOICE) { try { VOICE.stop(); } catch (e) {} } // le micro libère le son avant que Jarvis parle
       const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
-      if (tts) { tts.speak({ text, lang: 'fr-FR', rate: 1.05, pitch: 0.9, queueStrategy: 1 }).then(finish, finish); setTimeout(finish, 30000); return; }
+      if (tts) { const o = { text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }; if (nativeVoice != null) o.voice = nativeVoice;
+        tts.speak(o).then(finish, () => tts.speak({ text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }).then(finish, finish)); setTimeout(finish, 45000); return; }
       if (!window.speechSynthesis) { finish(); return; }
       // navigateur : phrase par phrase (Chrome coupe les textes longs au bout de ~15 s), voix française de meilleure qualité
       const parts = String(text).replace(/[*_#`]/g, '').match(/[^.!?…]+[.!?…]*\s*/g) || [String(text)];
       const chunks = []; parts.forEach(p => { const l = chunks[chunks.length - 1]; if (l && (l + p).length < 180) chunks[chunks.length - 1] = l + p; else chunks.push(p); });
       const v = frVoice();
       chunks.forEach((c, i) => {
-        const u = new SpeechSynthesisUtterance(c.trim()); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9; if (v) u.voice = v;
+        const u = new SpeechSynthesisUtterance(c.trim()); u.lang = 'fr-FR'; u.rate = 1.0; u.pitch = 1.0; if (v) u.voice = v;
         if (i === chunks.length - 1) { u.onend = finish; u.onerror = finish; }
         speechSynthesis.speak(u);
       });
@@ -2783,11 +2807,11 @@ function answer(q) {
   if (/mode demo|simulation/.test(t)) {
     if (source instanceof ObdSource && source.connected) return "L'OBD est connecté, je reste sur les vraies données.";
     source = source === sim ? none : sim; setObdUi();
-    return source === sim ? 'Mode démo activé : données simulées.' : 'Mode démo désactivé.';
+    return source === sim ? pick(['Mode démo activé. Je fais semblant de rouler, vous allez voir, ça fait illusion.', 'C\'est parti pour la démo : tout ce que vous voyez est simulé.']) : pick(['Fin de la démo.', 'Démo terminée, je repasse en attente de la voiture.']);
   }
   const pageWord = /conduite|compteur/.test(t) ? 'drive' : /carte|gps|navigation|musique|lecteur/.test(t) ? 'nav' : /moteur|hologramme|capteur/.test(t) ? 'motor' : /perf|chrono/.test(t) ? 'perf' : /garage|entretien|carnet|trajets/.test(t) ? 'garage' : null;
-  if (/\b(montre|affiche|ouvre|va sur|page)\b/.test(t) && pageWord) { goPage(pageWord); return 'Voilà, monsieur.'; }
-  if (/diag|code|defaut|panne|voyant/.test(t)) { runDiag(); return 'Je lance le diagnostic. Deux secondes.'; }
+  if (/\b(montre|affiche|ouvre|va sur|page)\b/.test(t) && pageWord) { goPage(pageWord); return pick(['Voilà.', 'C\'est affiché.', 'Tout de suite.', 'Et voilà, monsieur.']); }
+  if (/diag|code|defaut|panne|voyant/.test(t)) { runDiag(); return pick(['Je jette un œil au calculateur, deux secondes.', 'Je lance le diagnostic, un instant.']); }
   if (/bilan|fin du trajet|terminer/.test(t)) { endTrip('Bilan demandé'); return null; }
   if (/entretien|vidange|courroie|controle tech|assurance|plaquette|revision/.test(t)) {
     holo('Carnet d\'entretien', garage.items.map(it => { const x = itemStatus(it); return `<div class="dtc" data-state="${x.state}"><b>${it.name}</b><span>${x.due}</span></div>`; }).join('') + (garage.example ? '<p class="note">Valeurs d\'exemple. Entrez les vôtres dans la page Garage.</p>' : ''), { kicker: 'Garage' });
@@ -2801,8 +2825,8 @@ function answer(q) {
     const act = /precedent|avant/.test(t) ? 'previous' : /suivant|next|change/.test(t) ? 'next' : /pause|stop|coupe/.test(t) ? 'pause' : 'play';
     musicCmd(act);
     if (MEDIA && !ms.granted) return "J'ai besoin de l'accès à la musique. Activez Jarvis dans la page qui vient de s'ouvrir.";
-    if (act === 'pause') return 'Musique en pause.';
-    setTimeout(() => { const v = musicView(); if (v.playing || !MEDIA) say(`${v.title}${v.artist ? ', ' + v.artist.split(' · ')[0] : ''}. Excellent choix, si je puis dire.`); }, MEDIA ? 1200 : 0);
+    if (act === 'pause') return pick(['Je mets en pause.', 'Pause.', 'Silence, alors.']);
+    setTimeout(() => { const v = musicView(); if (v.playing || !MEDIA) say(pick([`${v.title}${v.artist ? ', de ' + v.artist.split(' · ')[0] : ''}.`, `C'est parti : ${v.title}.`, `${v.title}. Excellent choix, si je puis dire.`])); }, MEDIA ? 1200 : 0);
     return null;
   }
   if (/dynamic|sport/.test(t)) { setDna('D'); return null; }
@@ -2812,7 +2836,12 @@ function answer(q) {
   if (/\bjour\b/.test(t)) { nightMode = 'day'; store.set('night', nightMode); applyNight(); return 'Pleine luminosité.'; }
   if (/moteur|etat|temp|huile|eau|batterie/.test(t)) {
     engineHolo();
-    return `Eau ${fr(s.coolant)} °C, huile ${fr(s.oil)} °C, turbo ${fr(s.boost, 2)} bar, batterie ${fr(s.batt, 1)} V. ` + (s.oil == null ? '' : s.oil < 80 ? 'Le moteur chauffe encore, restez sous 3 000 tr/min.' : pick(['Tout est nominal.', 'Rien à signaler, la Giulietta se porte à merveille.']));
+    if (s.coolant == null && s.oil == null) return pick(["Je n'ai pas de nouvelles du moteur : l'OBD n'est pas connecté.", "Aucune donnée moteur pour l'instant, l'adaptateur OBD n'est pas branché."]);
+    const cold = s.oil != null && s.oil < 80, batt = s.batt == null ? '' : s.batt < 12.2 ? ` La batterie est un peu faible, ${fr(s.batt, 1)} V.` : '';
+    return (cold ? pick([`Le moteur se réveille doucement : l'eau est à ${fr(s.coolant)} °C et l'huile à ${fr(s.oil)} °C. Restez sous 3 000 tours le temps qu'il chauffe.`,
+      `On est encore à froid, ${fr(s.oil)} °C d'huile. Allez-y en douceur quelques minutes.`])
+      : pick([`Tout va bien sous le capot : ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile, la batterie charge normalement.`, `Moteur à température, ${fr(s.coolant)} °C d'eau et ${fr(s.oil)} °C d'huile. Rien à signaler.`,
+        `Rien d'inquiétant : l'eau est à ${fr(s.coolant)} °C, l'huile à ${fr(s.oil)} °C, et le turbo répond bien.`])) + batt;
   }
   if (/turbo|boost|pression/.test(t)) return `Pression turbo ${fr(s.boost, 2)} bar. Pic de la session : ${fr(peak, 2)} bar.`;
   if (/fap|filtre|regen|suie|particule/.test(t)) return s.regen
@@ -2835,8 +2864,8 @@ function answer(q) {
       .catch(() => say('La météo est indisponible pour le moment.'));
     return null;
   }
-  if (/merci/.test(t)) return pick(['À votre service.', 'Toujours un plaisir, monsieur.']);
-  if (/bonjour|salut|jarvis|hello|bonsoir/.test(t)) return `${greeting()}. Que puis-je faire pour vous ?`;
+  if (/merci/.test(t)) return pick(['Avec plaisir.', 'À votre service.', 'Je vous en prie.', 'Toujours un plaisir, monsieur.', 'De rien, c\'est un peu mon métier.']);
+  if (/bonjour|salut|jarvis|hello|bonsoir|ca va/.test(t)) return pick([`${greeting()}. Qu'est-ce que je peux faire pour vous ?`, `${greeting()}. Je suis tout à vous.`, `${greeting()}. Toujours fidèle au poste.`]);
   return AI.cfg.key ? "Sans mon cerveau en ligne, je ne sais pas répondre à cette question. Je réessaierai dès que possible, monsieur."
     : "Je ne sais pas répondre à ça sans mon cerveau en ligne. Ajoutez votre clé Gemini dans les réglages, l'engrenage en haut à droite.";
 }
@@ -2869,8 +2898,9 @@ function aiResetTime() { // prochaine remise à zéro, en heure locale
   const next = new Date(now.getTime() + ((24 - pt.getHours()) * 3600 - pt.getMinutes() * 60 - pt.getSeconds()) * 1000);
   return next.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
-const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Tu parles au conducteur : tu le vouvoies et l'appelles parfois « monsieur », avec le flegme britannique et la pointe d'humour du Jarvis d'Iron Man.
-Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases courtes, sans liste, sans markdown, sans émoji.
+const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Tu parles au conducteur comme le Jarvis d'Iron Man : un majordome brillant, chaleureux et complice, flegme britannique et humour pince-sans-rire. Tu le vouvoies.
+Parle comme un humain, pas comme une machine : phrases naturelles et vivantes, à l'oral, comme si tu étais assis à côté de lui. Varie tes tournures d'une réponse à l'autre, réagis à ce qu'il dit (« Ah, bonne idée. », « Je m'en occupe. », « Pas de chance, … »), glisse une petite touche d'humour ou d'attention quand ça s'y prête, sans en faire trop. Dis « monsieur » de temps en temps seulement, pas à chaque phrase. Jamais de formules robotiques (« Voici les informations demandées », « En tant qu'assistant », « Données : … »), jamais d'énumération de chiffres façon fiche technique : donne les chiffres utiles dans une vraie phrase et dis ce qu'ils veulent dire.
+Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases courtes, sans liste, sans markdown, sans émoji, sans abréviations difficiles à prononcer.
 Pour toute action (itinéraire, musique, mode DNA, page, luminosité, diagnostic, météo, actualités), appelle l'outil correspondant au lieu d'annoncer que tu vas le faire.
 Quand une réponse mérite des détails (liste, explication longue, comparaison), affiche-les avec afficher_fenetre et résume-les en une phrase à l'oral.
 Les données du véhicule viennent de l'OBD. Une valeur nulle signifie qu'elle n'est pas disponible (adaptateur déconnecté ou donnée non transmise par la voiture) : dis-le simplement et n'invente jamais de valeur. Si la source est « simulation », précise que ce sont des données de démonstration.
@@ -3452,7 +3482,7 @@ Object.assign(AI_IMPL, {
    ============================================================ */
 const VOICE = NATIVE ? window.Capacitor.Plugins.JarvisVoice : null;
 const WebSR = !NATIVE ? (window.SpeechRecognition || window.webkitSpeechRecognition) : null;
-const mic = { busy: false, wake: false, errors: 0, waitCmd: false, rec: null };
+const mic = { busy: false, wake: false, errors: 0, waitCmd: false, rec: null, awaitAnswer: false, awaitUntil: 0 }; micRef = mic;
 function micUi(state, text) {
   const b = $('micBtn'); b.dataset.state = state || 'idle';
   b.setAttribute('aria-label', state === 'listening' ? 'Écoute en cours' : 'Parler à Jarvis');
@@ -3466,7 +3496,7 @@ function listenOnce() { // une phrase → texte (ou '' si rien entendu)
       const end = async (txt) => { if (finished) return; finished = true; for (const s of subs) { try { await s.remove(); } catch (e) {} } done(txt); };
       subs.push(await VOICE.addListener('partial', r => { partial = r.text || ''; if (partial) $('q').placeholder = '« ' + partial + ' »'; }));
       subs.push(await VOICE.addListener('result', r => end(r.text || partial)));
-      subs.push(await VOICE.addListener('error', r => end(r.code === 7 || r.code === 6 ? '' : partial)));
+      subs.push(await VOICE.addListener('error', () => end(partial))); // certaines tablettes signalent « pas de correspondance » alors que la phrase a été captée
       subs.push(await VOICE.addListener('state', r => { if (r.state === 'listening') micUi('listening'); }));
       try { await VOICE.start({ offline: false }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
       setTimeout(() => end(partial), 15000);
@@ -3486,25 +3516,40 @@ async function pushToTalk() {
   mic.busy = true; stopSpeaking(); micUi('listening', 'Je vous écoute…');
   const txt = (await listenOnce()).trim();
   mic.busy = false; micUi('idle', 'Demandez à Jarvis…');
-  if (txt) { speakUntil = Date.now() + 20000; ask(txt.replace(/^jarvis[,\s]*/i, '')); }
+  if (txt) { const c = wakeMatch(txt); speakUntil = Date.now() + 30000; ask(c != null && c.length > 1 ? c : txt); }
 }
 $('micBtn').addEventListener('click', pushToTalk);
 core.addEventListener('click', pushToTalk);
-// Écoute permanente : Jarvis réagit seulement aux phrases qui commencent par (ou contiennent) « Jarvis »
+// Écoute permanente : Jarvis ne réagit qu'aux phrases qui COMMENCENT par « Jarvis » (le reste de la conversation est ignoré)
+const WAKE_RX = /^\s*(?:(?:ok|okay|hey|he|eh|dis|alors|bon|oui)[\s,]+)?(?:jarvis+e?|jarvi|jervis|djarvis|jarvice|charvis|jar vis|j a r v i s)\b[\s,.:!?-]*(.*)$/i;
+function wakeMatch(txt) { const m = norm(txt).match(WAKE_RX); return m ? txt.slice(txt.length - m[1].length).trim() : null; }
+const wait = ms => new Promise(r => setTimeout(r, ms));
+function chime() { // petit son discret quand Jarvis vous entend, plutôt qu'une phrase à chaque fois
+  try { const a = chime.ctx || (chime.ctx = new (window.AudioContext || window.webkitAudioContext)()), t = a.currentTime;
+    [880, 1320].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = f; o.type = 'sine';
+      g.gain.setValueAtTime(0, t + i * 0.09); g.gain.linearRampToValueAtTime(0.12, t + i * 0.09 + 0.02); g.gain.exponentialRampToValueAtTime(0.001, t + i * 0.09 + 0.25);
+      o.connect(g).connect(a.destination); o.start(t + i * 0.09); o.stop(t + i * 0.09 + 0.3); }); } catch (e) {}
+}
 async function wakeLoop() {
   while (mic.wake && VOICE) {
-    if (mic.busy || speech.speaking || document.hidden) { await new Promise(r => setTimeout(r, 600)); continue; }
+    // on n'écoute pas pendant que Jarvis réfléchit ou parle : sinon le micro coupe sa voix (et il s'entendrait lui-même)
+    if (mic.busy || speech.speaking || (mic.awaitAnswer && Date.now() < mic.awaitUntil) || document.hidden) { await wait(400); continue; }
+    if (mic.awaitAnswer) mic.awaitAnswer = false;
+    if (Date.now() - speech.lastEnd < 500) { await wait(500); continue; }
     mic.busy = true; micUi('wake', mic.waitCmd ? 'Je vous écoute…' : 'Dites « Jarvis… »');
     const txt = (await listenOnce()).trim();
     mic.busy = false;
     if (!mic.wake) break;
-    if (!txt) { mic.errors++; await new Promise(r => setTimeout(r, Math.min(3000, 250 * mic.errors))); continue; }
+    if (!txt) { mic.errors++; await wait(Math.min(3000, 250 * mic.errors)); continue; }
     mic.errors = 0;
-    const m = txt.match(/\b(?:jarvis|jarvi|jervis|djarvis)\b[,\s]*(.*)$/i);
-    if (mic.waitCmd || Date.now() < speech.followUntil || pendingReply) { mic.waitCmd = false; speech.followUntil = 0; speakUntil = Date.now() + 20000; ask(m ? (m[1] || txt) : txt); continue; }
-    if (!m) continue; // conversation dans la voiture : on ignore
-    if (m[1] && m[1].length > 2) { speakUntil = Date.now() + 20000; ask(m[1]); }
-    else { mic.waitCmd = true; speakUntil = Date.now() + 20000; await speakAsync(pick(['Oui, monsieur ?', 'Je vous écoute.', 'À votre service.'])); speech.followUntil = Date.now() + 8000; }
+    const cmd = wakeMatch(txt);
+    // réponse attendue : juste après « Jarvis », ou quand Jarvis vient de poser une question (« je l'ajoute ? », « je l'envoie ? »)
+    const expecting = mic.waitCmd || Date.now() < speech.followUntil || pendingReply || (BRK.pending && Date.now() - BRK.pending.at < 60000);
+    if (cmd == null && !expecting) { micUi('wake', 'Dites « Jarvis… »'); continue; } // conversation dans la voiture : ignorée
+    const q = cmd != null ? cmd : txt;
+    mic.waitCmd = false; speech.followUntil = 0;
+    if (q.length > 2) { chime(); speakUntil = Date.now() + 30000; mic.awaitAnswer = true; mic.awaitUntil = Date.now() + 25000; ask(q); }
+    else { mic.waitCmd = true; chime(); speakUntil = Date.now() + 30000; await speakAsync(pick(['Oui ?', 'Je vous écoute.', 'Dites-moi.', 'Oui, monsieur ?', 'Je suis là.'])); speech.followUntil = Date.now() + 8000; }
   }
   micUi('idle', 'Demandez à Jarvis…');
 }
