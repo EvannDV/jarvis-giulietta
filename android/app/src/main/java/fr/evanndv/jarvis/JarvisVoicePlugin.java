@@ -70,8 +70,7 @@ public class JarvisVoicePlugin extends Plugin {
     /** Rétablit le son tout de suite (Jarvis va parler). */
     @PluginMethod
     public void unmute(PluginCall call) {
-        main.post(() -> { session++; unmuteNow(); });
-        call.resolve();
+        main.post(() -> { session++; if (recognizer != null) recognizer.cancel(); unmuteNow(); call.resolve(); }); // répond seulement une fois le son rétabli
     }
 
     @PluginMethod
@@ -150,8 +149,7 @@ public class JarvisVoicePlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        main.post(() -> { session++; if (recognizer != null) recognizer.cancel(); unmuteNow(); });
-        call.resolve();
+        main.post(() -> { session++; if (recognizer != null) recognizer.cancel(); unmuteNow(); call.resolve(); });
     }
 
     @Override

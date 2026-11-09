@@ -2702,12 +2702,13 @@ function addMsg(text, me) {
   tick();
   if (/\?\s*$/.test(text)) speech.followUntil = Date.now() + 12000;
   if (voiceOn || Date.now() < speakUntil) speak(text);
-  if (micRef && micRef.awaitAnswer) micRef.awaitAnswer = false; // la réponse est arrivée : l'écoute reprendra quand Jarvis aura fini de parler
+  if (micRef && micRef.awaitAnswer && Date.now() - micRef.askAt > 200) micRef.awaitAnswer = false; // la réponse est arrivée : l'écoute reprendra quand Jarvis aura fini de parler
 }
 const say = t => addMsg(t);
 function speak(text) { speakAsync(text); }
 // Parle et se résout à la fin : pendant ce temps, l'écoute du micro est suspendue (Jarvis ne s'entend pas lui-même)
 // Texte écrit → texte à dire : unités en toutes lettres, sans abréviations qu'une voix lit mal
+function wait(ms) { return new Promise(r => setTimeout(r, ms)); }
 function speechText(t) {
   return String(t)
     .replace(/\s?°\s?C\b/g, ' degrés').replace(/\s?°/g, ' degrés')
@@ -2733,11 +2734,11 @@ function speakAsync(text) {
     let ended = false; const finish = () => { if (ended) return; ended = true; speech.speaking = false; speech.lastEnd = Date.now(); done(); };
     try {
       speech.speaking = true;
-      if (micRef && micRef.wake && micRef.busy && VOICE) { try { VOICE.stop(); } catch (e) {} } // le micro libère le son avant que Jarvis parle
       const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
       if (tts) { const o = { text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }; if (nativeVoice != null) o.voice = nativeVoice;
-        const jv = window.Capacitor.Plugins.JarvisVoice, un = jv && jv.unmute ? jv.unmute().catch(() => {}) : Promise.resolve(); // rend le son coupé pendant l'écoute
-        un.then(() => tts.speak(o)).then(finish, () => tts.speak({ text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }).then(finish, finish)); setTimeout(finish, 45000); return; }
+        // avant de parler : on arrête l'écoute et on rétablit le son coupé pendant l'écoute, puis on laisse 150 ms au micro pour rendre la main
+        const jv = window.Capacitor.Plugins.JarvisVoice, ready = (jv && jv.unmute ? Promise.race([jv.unmute().catch(() => {}), wait(800)]) : Promise.resolve()).then(() => wait(150));
+        ready.then(() => tts.speak(o)).then(finish, () => tts.speak({ text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }).then(finish, finish)); setTimeout(finish, 45000); return; }
       if (!window.speechSynthesis) { finish(); return; }
       // navigateur : phrase par phrase (Chrome coupe les textes longs au bout de ~15 s), voix française de meilleure qualité
       const parts = String(text).replace(/[*_#`]/g, '').match(/[^.!?…]+[.!?…]*\s*/g) || [String(text)];
@@ -3143,6 +3144,7 @@ function openSettings(msg) {
     <label class="chk"><input type="checkbox" id="sBrief"> Briefing au démarrage</label>
     <label class="chk"><input type="checkbox" id="sVoice"> Voix de Jarvis (toujours)</label>
     <label class="chk"><input type="checkbox" id="sWake"> Écoute permanente « Jarvis… » (appli Android)</label>
+    <label class="chk"><input type="checkbox" id="sQuiet"> Écoute permanente sans bip (décochez si Jarvis devient muet)</label>
     <label class="chk"><input type="checkbox" id="sSpeed"> Alerte vocale de dépassement de vitesse</label>
     <label class="chk"><input type="checkbox" id="sSounds"> Sons du mode Sport (coup de gaz à l'activation)</label>
     <label class="chk"><input type="checkbox" id="sMap3d"> Carte en 3D (bâtiments en relief ; décochez si la tablette rame)</label>
@@ -3166,9 +3168,9 @@ function openSettings(msg) {
     return `<div data-state="${st}"><span>${m.replace('gemini-', 'Gemini ').replace('-flash-lite', ' Flash-Lite').replace('-flash', ' Flash')}</span><b>${n} / ${max}</b><div class="bar"><i style="width:${Math.min(100, n / max * 100).toFixed(0)}%"></i></div></div>`; }).join('')
     + `<p class="note">Requêtes comptées sur cet appareil aujourd'hui. Remise à zéro à ${aiResetTime()}.</p>`;
   $('sKey').value = AI.cfg.key; $('sModel').value = AI.cfg.model; $('sBrief').checked = AI.cfg.briefing; $('sVoice').checked = voiceOn;
-  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sFlash').checked = !!AI.cfg.flash; $('sMap3d').checked = AI.cfg.map3d !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
+  $('sWake').checked = !!AI.cfg.wake; $('sWake').disabled = !NATIVE; $('sSpeed').checked = AI.cfg.speedVoice !== false; $('sSounds').checked = AI.cfg.sounds !== false; $('sBreaks').checked = AI.cfg.breaks !== false; $('sFlash').checked = !!AI.cfg.flash; $('sMap3d').checked = AI.cfg.map3d !== false; $('sQuiet').checked = AI.cfg.quietBeep !== false; $('sMsg2').checked = !!AI.cfg.messages; $('sMsg2').disabled = !NATIVE;
   const save = () => {
-    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked, flash: $('sFlash').checked, map3d: $('sMap3d').checked };
+    AI.cfg = { key: $('sKey').value.trim(), model: $('sModel').value, briefing: $('sBrief').checked, wake: $('sWake').checked, speedVoice: $('sSpeed').checked, messages: $('sMsg2').checked, sounds: $('sSounds').checked, breaks: $('sBreaks').checked, flash: $('sFlash').checked, map3d: $('sMap3d').checked, quietBeep: $('sQuiet').checked };
     apply3d();
     store.set('ai', AI.cfg); setVoice($('sVoice').checked); AI.hist = [];
     if (mic.wake !== AI.cfg.wake) setWake(AI.cfg.wake);
@@ -3500,7 +3502,7 @@ function listenOnce() { // une phrase → texte (ou '' si rien entendu)
       subs.push(await VOICE.addListener('result', r => end(r.text || partial)));
       subs.push(await VOICE.addListener('error', () => end(partial))); // certaines tablettes signalent « pas de correspondance » alors que la phrase a été captée
       subs.push(await VOICE.addListener('state', r => { if (r.state === 'listening') micUi('listening'); }));
-      try { await VOICE.start({ offline: false, quiet: !!(mic.wake && !mic.manual) }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
+      try { await VOICE.start({ offline: false, quiet: !!(mic.wake && !mic.manual && AI.cfg.quietBeep !== false) }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
       setTimeout(() => end(partial), 15000);
     } else if (WebSR) {
       const rec = new WebSR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -3525,7 +3527,6 @@ core.addEventListener('click', pushToTalk);
 // Écoute permanente : Jarvis ne réagit qu'aux phrases qui COMMENCENT par « Jarvis » (le reste de la conversation est ignoré)
 const WAKE_RX = /^\s*(?:(?:ok|okay|hey|he|eh|dis|alors|bon|oui)[\s,]+)?(?:jarvis+e?|jarvi|jervis|djarvis|jarvice|charvis|jar vis|j a r v i s)\b[\s,.:!?-]*(.*)$/i;
 function wakeMatch(txt) { const m = norm(txt).match(WAKE_RX); return m ? txt.slice(txt.length - m[1].length).trim() : null; }
-const wait = ms => new Promise(r => setTimeout(r, ms));
 function chime() { // petit son discret quand Jarvis vous entend, plutôt qu'une phrase à chaque fois
   try { const a = chime.ctx || (chime.ctx = new (window.AudioContext || window.webkitAudioContext)()), t = a.currentTime;
     [880, 1320].forEach((f, i) => { const o = a.createOscillator(), g = a.createGain(); o.frequency.value = f; o.type = 'sine';
@@ -3550,7 +3551,7 @@ async function wakeLoop() {
     if (cmd == null && !expecting) { micUi('wake', 'Dites « Jarvis… »'); continue; } // conversation dans la voiture : ignorée
     const q = cmd != null ? cmd : txt;
     mic.waitCmd = false; speech.followUntil = 0;
-    if (q.length > 2) { chime(); speakUntil = Date.now() + 30000; mic.awaitAnswer = true; mic.awaitUntil = Date.now() + 25000; ask(q); }
+    if (q.length > 2) { chime(); speakUntil = Date.now() + 30000; mic.awaitAnswer = true; mic.askAt = Date.now(); mic.awaitUntil = Date.now() + 25000; ask(q); }
     else { mic.waitCmd = true; chime(); speakUntil = Date.now() + 30000; await speakAsync(pick(['Oui, monsieur ?', 'Monsieur ?', 'Je vous écoute, monsieur.', 'À votre service, monsieur.', 'Je suis là, monsieur.'])); speech.followUntil = Date.now() + 8000; }
   }
   micUi('idle', 'Demandez à Jarvis…');
