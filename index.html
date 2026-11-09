@@ -2697,7 +2697,7 @@ $('holoClose').addEventListener('click', closeHolo);
    JARVIS : console, voix, personnalité
    ============================================================ */
 const logEl = $('log'), core = $('core');
-let voiceOn = !!store.get('voice', false);
+let voiceOn = !!store.get('voice2', true); // voix activée par défaut : Jarvis répond à voix haute
 let speakUntil = 0; // réponses lues à voix haute pendant 20 s après une question posée à la voix
 const speech = { speaking: false, followUntil: 0 }; // followUntil : Jarvis vient de poser une question, on écoute la réponse sans « Jarvis »
 const stamp = () => new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -2730,12 +2730,34 @@ function speakAsync(text) {
       speech.speaking = true;
       const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
       if (tts) { tts.speak({ text, lang: 'fr-FR', rate: 1.05, pitch: 0.9, queueStrategy: 1 }).then(finish, finish); setTimeout(finish, 30000); return; }
-      const u = new SpeechSynthesisUtterance(text); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9;
-      const v = speechSynthesis.getVoices().find(v => v.lang && v.lang.startsWith('fr')); if (v) u.voice = v;
-      u.onend = finish; u.onerror = finish;
-      speechSynthesis.speak(u); setTimeout(finish, Math.min(30000, 1500 + text.length * 90));
+      if (!window.speechSynthesis) { finish(); return; }
+      // navigateur : phrase par phrase (Chrome coupe les textes longs au bout de ~15 s), voix française de meilleure qualité
+      const parts = String(text).replace(/[*_#`]/g, '').match(/[^.!?…]+[.!?…]*\s*/g) || [String(text)];
+      const chunks = []; parts.forEach(p => { const l = chunks[chunks.length - 1]; if (l && (l + p).length < 180) chunks[chunks.length - 1] = l + p; else chunks.push(p); });
+      const v = frVoice();
+      chunks.forEach((c, i) => {
+        const u = new SpeechSynthesisUtterance(c.trim()); u.lang = 'fr-FR'; u.rate = 1.05; u.pitch = 0.9; if (v) u.voice = v;
+        if (i === chunks.length - 1) { u.onend = finish; u.onerror = finish; }
+        speechSynthesis.speak(u);
+      });
+      if (speechSynthesis.paused) speechSynthesis.resume();
+      setTimeout(finish, Math.min(60000, 2000 + text.length * 90));
     } catch (e) { finish(); }
   });
+}
+// Voix du navigateur : la meilleure voix française disponible (Google, puis Microsoft/Apple, puis n'importe quelle voix fr)
+let frVoiceCache = null;
+function frVoice() {
+  if (frVoiceCache) return frVoiceCache;
+  const vs = (window.speechSynthesis && speechSynthesis.getVoices()) || [], fr = vs.filter(v => /^fr/i.test(v.lang));
+  frVoiceCache = fr.find(v => /google/i.test(v.name) && /fr.FR/i.test(v.lang)) || fr.find(v => /(thomas|henri|denise|paul|julie|amelie|audrey)/i.test(v.name)) || fr.find(v => /fr.FR/i.test(v.lang)) || fr[0] || null;
+  return frVoiceCache;
+}
+if (!NATIVE && window.speechSynthesis) {
+  speechSynthesis.onvoiceschanged = () => { frVoiceCache = null; frVoice(); };
+  // les navigateurs n'autorisent la voix qu'après un premier geste : on la « débloque » au premier toucher
+  const unlock = () => { try { const u = new SpeechSynthesisUtterance(' '); u.volume = 0; speechSynthesis.speak(u); } catch (e) {} removeEventListener('pointerdown', unlock, true); removeEventListener('keydown', unlock, true); };
+  addEventListener('pointerdown', unlock, true); addEventListener('keydown', unlock, true);
 }
 function stopSpeaking() {
   try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (e) {}
@@ -4194,7 +4216,7 @@ function ask(q) {
 $('ask').addEventListener('submit', e => { e.preventDefault(); ask($('q').value); $('q').value = ''; });
 document.querySelectorAll('[data-q]').forEach(b => b.addEventListener('click', () => ask(b.dataset.q)));
 function setVoice(on, announce) {
-  voiceOn = !!on; store.set('voice', voiceOn);
+  voiceOn = !!on; store.set('voice2', voiceOn);
   $('voice').setAttribute('aria-pressed', voiceOn); $('voice').textContent = voiceOn ? 'Voix · on' : 'Voix';
   if (voiceOn) { if (announce) speak('Voix activée.'); } else try { if (NATIVE && window.Capacitor.Plugins.TextToSpeech) window.Capacitor.Plugins.TextToSpeech.stop(); else speechSynthesis.cancel(); } catch (_) {}
 }
