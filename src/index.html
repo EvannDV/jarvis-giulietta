@@ -833,6 +833,7 @@ button{cursor:pointer}
         <div class="diag">
           <div class="ptitle"><span class="label">Codes défaut</span><button class="btn" id="diagBtn" type="button">Lancer le diagnostic</button></div>
           <div id="diagOut"><p class="note">Lit les codes d'erreur du calculateur et les explique en français.</p></div>
+          <div class="ptitle" style="margin-top:10px"><span class="label">Données Alfa</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="dnaLearnBtn" type="button">Apprendre le DNA</button><button class="btn" id="scanBtn" type="button">Chercher huile / ext.</button><button class="btn" id="obdRepBtn" type="button">Rapport OBD</button></span></div>
         </div>
       </div>
     </section>
@@ -1165,12 +1166,56 @@ class NativeBleLink {
     return this.ch.wnr ? this.P.writeWithoutResponse(o) : this.P.write(o);
   }
 }
+// Identifiants constructeur testés (diesels Multijet Fiat/Alfa, d'après les forums : à confirmer sur chaque voiture)
+const MFR_DIDS = {
+  '18E4': { name: 'Encrassement du FAP', unit: '%', f: b => { const v = ((b[0] << 8) + (b[1] || 0)) * 1000 / 65535; return Math.round((v > 100 ? v / 10 : v) * 10) / 10; } },
+  '3807': { name: 'Distance depuis la dernière régénération', unit: 'km', f: b => Math.round(((b[0] << 16) + ((b[1] || 0) << 8) + (b[2] || 0)) * 0.1) },
+  '380B': { name: 'Régénération en cours', unit: '', f: b => b[0] },
+  '18DE': { name: 'Température échappement (brut)', unit: '', f: b => b.map(x => hex2(x)).join(' ') }
+};
+// Décodages courants des températures Bosch
+const TEMP_F = { 'A-40': b => b[0] - 40, 'B-40': b => b[1] - 40, 'AB/10-40': b => ((b[0] << 8) + b[1]) / 10 - 40, 'AB/10-273': b => ((b[0] << 8) + b[1]) / 10 - 273.1, 'AB/100': b => ((b[0] << 8) + b[1]) / 100, 'AB*0.02-40': b => ((b[0] << 8) + b[1]) * 0.02 - 40 };
+const decodeTemp = (b, f) => { try { const v = TEMP_F[f](b); return isFinite(v) ? Math.round(v) : null; } catch (e) { return null; } };
+function parseFrames(txt) { // « 1A0 01 02 … » ou « 18 DA F1 10 01 02 … »
+  const out = [];
+  (txt || '').toUpperCase().split(/[\r\n]+/).forEach(l => {
+    const tk = l.trim().split(/\s+/); if (!tk[0] || !/^[0-9A-F]+$/.test(tk.join(''))) return;
+    if (tk[0].length === 3 && tk.slice(1).every(x => x.length === 2)) out.push({ id: tk[0], d: tk.slice(1).map(x => parseInt(x, 16)) });
+    else if (tk.length >= 4 && tk.every(x => x.length === 2)) out.push({ id: tk.slice(0, 4).join(''), d: tk.slice(4).map(x => parseInt(x, 16)) });
+  });
+  return out;
+}
+// Cherche l'octet qui vaut la même chose dans chaque position du DNA et qui change d'une position à l'autre
+function findDnaSignal(cap) { // cap = { N: frames, D: frames, A: frames, N2: frames }
+  const by = k => { const m = {}; cap[k].forEach(f => (m[f.id] = m[f.id] || []).push(f.d)); return m; };
+  const g = { N: by('N'), D: by('D'), A: by('A'), N2: by('N2') };
+  const best = [];
+  Object.keys(g.N).forEach(id => {
+    if (!g.D[id] || !g.A[id] || !g.N2[id]) return;
+    const len = Math.min(...['N', 'D', 'A', 'N2'].map(k => Math.min(...g[k][id].map(d => d.length))));
+    for (let i = 0; i < len; i++) {
+      let vary = 0; const v0 = {};
+      ['N', 'D', 'A', 'N2'].forEach(k => { v0[k] = g[k][id][0][i]; g[k][id].forEach(d => { vary |= d[i] ^ v0[k]; }); });
+      const mask = ~vary & 0xFF; if (!mask) continue;
+      const m = k => v0[k] & mask;
+      if (m('N') !== m('N2')) continue; // revenu en N : même valeur, sinon c'est une donnée qui dérive (température…)
+      if (new Set([m('N'), m('D'), m('A')]).size !== 3) continue;
+      const n = Math.min(g.N[id].length, g.D[id].length, g.A[id].length);
+      best.push({ id, byte: i, mask, vals: { N: m('N'), D: m('D'), A: m('A') }, score: n + (8 - popcount(m('N') ^ m('D'))) });
+    }
+  });
+  best.sort((a, b) => b.score - a.score);
+  return best;
+}
+const popcount = x => { let c = 0; while (x) { c += x & 1; x >>= 1; } return c; };
+
 class ObdSource {
   constructor(link) {
     this.link = link || (NATIVE ? new NativeBleLink() : new WebBleLink());
     this.link.onLost = () => this.lostLink();
     this.s = { speed: null, rpm: null, gear: null, boost: null, coolant: null, oil: null, batt: null, soot: null, regen: false, regens: 0, load: null, lph: null, ext: null, accel: 0 };
     this.raw = {}; this.sup = new Set(); this.buf = ''; this.pending = null; this.connected = false; this.slowI = 0; this.accRaw = 0; this.label = this.link.name || 'OBD';
+    this.mfr = { hdr: null, vals: {} }; this.task = null; this.lastMfr = 0; this.lastDna = 0; this.dnaVotes = [];
   }
   async connect() {
     await this.link.pick();
@@ -1191,6 +1236,9 @@ class ObdSource {
       if (!this.sup.has(hex2(base + 0x20))) break;
     }
     if (!this.sup.size) throw new Error("l'adaptateur répond, mais pas la voiture. Le contact est-il mis ?");
+    this.proto = ((await this.cmd('ATDPN', 1500)).match(/A?([0-9A-C])\s*$/i) || [])[1] || '6';
+    this.stn = /STN/i.test(await this.cmd('STI', 1500)); // puce OBDLink : écoute du réseau plus robuste (STMA)
+    try { await this.probeMfr(); } catch (e) {}
     this.lost = false; this.connected = true; this.loop();
   }
   // Liaison coupée : toutes les valeurs passent à NONE, pas de simulation, et on retente toutes les 4 s
@@ -1251,7 +1299,106 @@ class ObdSource {
   }
   async loop() {
     const FAST = ['0C', '0D', '0B', '04'], SLOW = ['05', '5C', '42', 'RV', '46', '33', '5E', '2F'];
-    while (this.connected) { for (const p of FAST) await this.read(p); await this.read(SLOW[this.slowI++ % SLOW.length]); }
+    while (this.connected) {
+      if (this.task) { this.idle = true; await new Promise(r => setTimeout(r, 200)); continue; } // scanner, apprentissage ou diagnostic : on laisse la main
+      this.idle = false;
+      for (const p of FAST) await this.read(p); await this.read(SLOW[this.slowI++ % SLOW.length]);
+      const now = Date.now();
+      if (this.mfr.hdr && now - this.lastMfr > 8000) { this.lastMfr = now; try { await this.readMfr(); } catch (e) {} }
+      const sig = store.get('dnaSig', null);
+      if (sig && now - this.lastDna > 2500) { this.lastDna = now; try { await this.readDna(sig); } catch (e) {} }
+    }
+  }
+
+  // Réserve l'adaptateur pour une tâche longue : on attend que la boucle de lecture ait fini son tour (pas de commandes mélangées)
+  async lock(name) {
+    while (this.task) await new Promise(r => setTimeout(r, 200));
+    this.task = name; this.idle = false;
+    for (let i = 0; i < 50 && this.connected && !this.idle; i++) await new Promise(r => setTimeout(r, 100));
+    return () => { if (this.task === name) this.task = null; };
+  }
+  /* ---------- Données constructeur Fiat / Alfa (mode 22, « ReadDataByIdentifier ») ----------
+     Pistes trouvées dans les forums pour les diesels Multijet (calculateur Bosch) : en-tête 29 bits 18DA10F1 ou 11 bits 7E0.
+     Rien n'est garanti sur chaque voiture : on teste à la connexion, et le scanner ci-dessous permet d'en trouver d'autres. */
+  parse22(resp, did) {
+    const lines = (resp || '').toUpperCase().replace(/SEARCHING\.\.\./g, '').split(/[\r\n]+/).map(l => l.replace(/\s/g, '').replace(/^[0-9A-F]:/, '')).filter(l => l && !/^[0-9A-F]{3}$/.test(l));
+    const c = lines.join(''), k = c.indexOf('62' + did);
+    if (k < 0) return null;
+    const h = c.slice(k + 6).match(/[0-9A-F]{2}/g); return h && h.length ? h.map(x => parseInt(x, 16)) : null;
+  }
+  async enter29() { if (this.proto !== '7') await this.cmd('ATTP7', 2500); await this.cmd('ATCP18'); await this.cmd('ATSHDA10F1'); }
+  async leave29() { if (this.proto !== '7') { await this.cmd('ATTP' + this.proto, 2500); await this.cmd('ATSH7DF'); } }
+  async probeMfr() {
+    const t = async () => this.parse22(await this.cmd('2218E4', 1500), '18E4') || this.parse22(await this.cmd('223807', 1500), '3807');
+    if (this.proto === '6' || this.proto === '8') {
+      await this.cmd('ATSH7E0');
+      if (await t()) { this.mfr.hdr = '7E0'; return; }
+      await this.cmd('ATSH7DF');
+    }
+    await this.enter29(); const ok = await t(); await this.leave29();
+    if (ok) this.mfr.hdr = '29';
+  }
+  async mfrBatch(dids) { // lit plusieurs identifiants d'un coup (un seul changement de protocole)
+    const out = {};
+    if (this.mfr.hdr === '29') await this.enter29();
+    try { for (const d of dids) { const b = this.parse22(await this.cmd('22' + d, 1200), d); if (b) out[d] = b; } }
+    finally { if (this.mfr.hdr === '29') await this.leave29(); }
+    return out;
+  }
+  async readMfr() {
+    const oil = store.get('oilDid', null), ext = store.get('extDid', null);
+    const dids = Object.keys(MFR_DIDS).concat(oil ? [oil.did] : [], ext ? [ext.did] : []);
+    const r = await this.mfrBatch([...new Set(dids)]);
+    Object.assign(this.mfr.vals, r); this.mfr.at = Date.now();
+  }
+  // Scanner : interroge des centaines d'identifiants et repère ceux qui ressemblent à une température (huile, extérieur)
+  async scanMfr(progress) {
+    if (!this.mfr.hdr) { try { await this.probeMfr(); } catch (e) {} }
+    if (!this.mfr.hdr) this.mfr.hdr = this.proto === '7' ? '29' : '7E0'; // on tente quand même
+    const release = await this.lock('scan'); const found = {};
+    try {
+      if (this.mfr.hdr === '29') await this.enter29(); else await this.cmd('ATSH7E0');
+      const hi = ['18', '19', '13', '10', '38', '39', '30', '31'];
+      for (let a = 0; a < hi.length; a++) for (let lo = 0; lo < 256; lo++) {
+        const did = hi[a] + hex2(lo), b = this.parse22(await this.cmd('22' + did, 400), did);
+        if (b) found[did] = b;
+        if (lo % 16 === 0 && progress) progress((a * 256 + lo) / (hi.length * 256), Object.keys(found).length);
+      }
+    } finally { if (this.mfr.hdr === '29') await this.leave29(); release(); }
+    return found;
+  }
+
+  /* ---------- Écoute du réseau CAN (lecture seule) : sert à reconnaître le sélecteur DNA ---------- */
+  monitor(ms, filt) {
+    const run = async () => {
+      await this._cmd('ATH1', 800); await this._cmd('ATS1', 800);
+      if (filt) { await this._cmd('ATCF' + filt.f, 800); await this._cmd('ATCM' + filt.m, 800); }
+      const txt = await new Promise(res => {
+        this.pending = { res, t: setTimeout(() => { this.pending = null; res(this.buf); this.buf = ''; }, ms + 2500) };
+        Promise.resolve().then(() => this.link.write((this.stn ? 'STMA' : 'ATMA') + '\r')).catch(() => {});
+        setTimeout(() => { Promise.resolve().then(() => this.link.write('\r')).catch(() => {}); }, ms); // n'importe quel caractère arrête l'écoute
+      });
+      if (filt) { const z = filt.m.length === 3 ? '000' : '00000000'; await this._cmd('ATCF' + z, 800); await this._cmd('ATCM' + z, 800); }
+      await this._cmd('ATS0', 800); await this._cmd('ATH0', 800);
+      return parseFrames(txt);
+    };
+    const p = (this.q || Promise.resolve()).then(run, run);
+    this.q = p.catch(() => {});
+    return p;
+  }
+  async captureAll(rounds) { // écoute large, par tranches d'identifiants pour ne rien rater
+    const frames = [];
+    if (this.proto === '6' || this.proto === '8') { for (let r = 0; r < (rounds || 1); r++) for (let g = 0; g < 8; g++) frames.push(...await this.monitor(650, { f: g + '00', m: '700' })); }
+    else for (let r = 0; r < 4 * (rounds || 1); r++) frames.push(...await this.monitor(1200));
+    return frames;
+  }
+  async readDna(sig) {
+    const fr = await this.monitor(400, { f: sig.id, m: sig.id.length === 3 ? '7FF' : '1FFFFFFF' });
+    const f = fr.find(x => x.id === sig.id && x.d.length > sig.byte); if (!f) return;
+    const v = f.d[sig.byte] & sig.mask, m = Object.keys(sig.vals).find(k => sig.vals[k] === v);
+    if (!m) return;
+    this.dnaVotes.push(m); this.dnaVotes = this.dnaVotes.slice(-2);
+    if (this.dnaVotes.length === 2 && this.dnaVotes[0] === m && this.onDna) this.onDna(m);
   }
   step(dt) {
     const r = this.raw, s = this.s, A = (p, i = 0) => r[p] ? r[p][i] : undefined, k = Math.min(1, dt * 8);
@@ -1266,7 +1413,14 @@ class ObdSource {
     s.coolant = r['05'] ? A('05') - 40 : null;
     s.oil = r['5C'] ? A('5C') - 40 : null;
     s.batt = r['42'] ? (A('42') * 256 + A('42', 1)) / 1000 : r.RV != null ? r.RV : null;
-    s.ext = r['46'] ? A('46') - 40 : null;
+    const mv = this.mfr.vals, oilD = store.get('oilDid', null), extD = store.get('extDid', null);
+    s.ext = r['46'] ? A('46') - 40 : extD && mv[extD.did] ? decodeTemp(mv[extD.did], extD.f) : null;
+    s.extSrc = s.ext != null ? 'voiture' : null;
+    if (s.ext == null && typeof wxNow !== 'undefined' && wxNow && Date.now() - wxNow.at < 3600e3) { s.ext = wxNow.temperature; s.extSrc = 'météo'; }
+    if (!r['5C'] && oilD && mv[oilD.did]) s.oil = decodeTemp(mv[oilD.did], oilD.f);
+    if (mv['18E4']) s.soot = MFR_DIDS['18E4'].f(mv['18E4']);
+    if (mv['3807']) s.regenKm = MFR_DIDS['3807'].f(mv['3807']);
+    if (mv['380B']) { const on = mv['380B'][0] > 0; if (on && !s.regen) s.regens = (s.regens || 0) + 1; s.regen = on; }
     s.fuel = r['2F'] ? A('2F') * 100 / 255 : null; // niveau de carburant, si la voiture le transmet
     s.lph = r['5E'] ? (A('5E') * 256 + A('5E', 1)) / 20 : s.rpm > 300 ? 0.55 + s.load * s.rpm / 1000 * 3.2 : 0;
     if (s.speed < 3) s.gear = 0;
@@ -2147,8 +2301,9 @@ const SENSORS = [
   ['Batterie', s => fr(s.batt, 1), 'V', s => st.batt(s.batt), '13,8–14,6 moteur tournant'],
   ['Suie FAP', s => fr(s.soot), '%', s => st.dpf(s.soot, s.regen), 'régénération vers 80'],
   ['Régénérations', s => s.regens, 'session', () => null],
+  ['Depuis la dernière régén.', s => s.regenKm == null ? 'NONE' : s.regenKm.toLocaleString('fr-FR'), 'km', s => s.regenKm == null ? NA : s.regenKm > 600 ? ['warn', 'bientôt'] : ['ok', 'normal'], 'régénération tous les 300–800 km'],
   ['Conso instantanée', s => fr(s.lph, 1), 'L/h', () => null],
-  ['Température ext.', s => fr(s.ext), '°C', s => s.ext <= 3 ? ['warn', 'verglas'] : null]
+  ['Température ext.', s => fr(s.ext) + (s.extSrc === 'météo' ? ' (météo)' : ''), '°C', s => s.ext != null && s.ext <= 3 ? ['warn', 'verglas'] : null]
 ];
 $('sensorList').innerHTML = SENSORS.map((r, i) => `<div class="srow" id="sr${i}"><span>${r[0]}${r[4] ? `<small class="srange">${r[4]}</small>` : ''}</span><b><span>--</span><small>${r[2]}</small></b><span class="state" style="visibility:hidden">--</span></div>`).join('');
 function renderSensors() {
@@ -2169,6 +2324,7 @@ async function runRealDiag(quiet) {
   diagBusy = true; $('diagBtn').disabled = true;
   $('diagOut').innerHTML = '<p class="note">Lecture des codes défaut du calculateur moteur…</p>';
   holo('Diagnostic', '<p>Lecture des codes défaut du calculateur moteur…</p>', { kicker: 'Diagnostic · OBD', ms: 0 });
+  const release = await source.lock('diag');
   try {
     const r = await source.readDtcs();
     const all = [...r.memorises.map(c => ({ code: c, type: 'mémorisé' })), ...r.en_attente.filter(c => !r.memorises.includes(c)).map(c => ({ code: c, type: 'en attente' }))];
@@ -2181,8 +2337,78 @@ async function runRealDiag(quiet) {
   } catch (e) {
     holo('Diagnostic', `<p>Lecture impossible : ${esc(e.message || e)}</p>`, { kicker: 'Diagnostic · OBD' });
     return { ok: false, raison: 'lecture impossible' };
-  } finally { $('diagBtn').disabled = false; diagBusy = false; }
+  } finally { release(); $('diagBtn').disabled = false; diagBusy = false; }
 }
+/* ---------- Données Alfa : apprentissage du DNA, scanner huile / extérieur, rapport OBD ---------- */
+const liveObd = () => source instanceof ObdSource && source.connected ? source : null;
+async function learnDna() {
+  const o = liveObd(); if (!o) { say("Il me faut l'OBD connecté, monsieur, moteur tournant."); return; }
+  if (o.task) { say('Je suis déjà occupé avec le calculateur, monsieur.'); return; }
+  const release = await o.lock('dna'); const cap = {};
+  try {
+    holo('Apprentissage DNA', '<p>Moteur tournant, à l\'arrêt. Suivez mes instructions : je vais écouter le réseau de la voiture pendant que vous tournez le sélecteur.</p><p class="note" id="dnaStep">Préparation…</p>', { kicker: 'Données Alfa', ms: 0 });
+    for (const [k, label] of [['N', 'N, Natural'], ['D', 'D, Dynamic'], ['A', 'A, All-weather'], ['N2', 'N, Natural, une dernière fois']]) {
+      const st = $('dnaStep'); if (st) st.textContent = `Sélecteur sur ${label}…`;
+      await speakAsync(`Mettez le sélecteur sur ${label}, monsieur.`); await wait(6000);
+      if (st) st.textContent = `J'écoute (${label})…`;
+      cap[k] = await o.captureAll(1);
+    }
+    const res = findDnaSignal(cap), n = cap.N.length + cap.D.length + cap.A.length;
+    if (!res.length) {
+      holo('Apprentissage DNA', `<p>Je n'ai pas trouvé le message du sélecteur DNA sur la prise OBD.</p><p class="note">${n} messages écoutés. Sur certaines voitures, le DNA circule sur un réseau qui n'arrive pas jusqu'à la prise. Vous pouvez réessayer moteur tournant, ou continuer à changer le mode depuis l'écran.</p>`, { kicker: 'Données Alfa', ms: 30000 });
+      say("Je n'ai pas trouvé le message du DNA sur la prise OBD, monsieur. Il circule peut-être sur un réseau que la prise ne voit pas.");
+      return;
+    }
+    const b = res[0]; store.set('dnaSig', { id: b.id, byte: b.byte, mask: b.mask, vals: b.vals, at: Date.now() });
+    holo('Apprentissage DNA', `<p>Trouvé : message <b>${b.id}</b>, octet ${b.byte + 1}. N = ${hex2(b.vals.N)}, D = ${hex2(b.vals.D)}, A = ${hex2(b.vals.A)}.</p><p class="note">L'écran suivra maintenant le sélecteur de la voiture. ${res.length > 1 ? (res.length - 1) + ' autre(s) piste(s) gardée(s) en réserve.' : ''}</p>`, { kicker: 'Données Alfa', ms: 30000 });
+    store.set('dnaAlt', res.slice(1, 4).map(x => ({ id: x.id, byte: x.byte, mask: x.mask, vals: x.vals })));
+    say('Appris, monsieur. Je suis désormais le sélecteur DNA de la voiture.');
+  } finally { release(); }
+}
+async function scanAlfa() {
+  const o = liveObd(); if (!o) { say("Il me faut l'OBD connecté, monsieur, moteur tournant."); return; }
+  if (o.task) { say('Je suis déjà occupé avec le calculateur, monsieur.'); return; }
+  const s0 = S();
+  if (s0.coolant == null || s0.coolant < 70) say("Petit conseil, monsieur : pour reconnaître la température d'huile, mieux vaut un moteur chaud, eau au-dessus de 80 degrés. Je lance quand même.");
+  holo('Recherche des données Alfa', '<p>J\'interroge le calculateur, environ une à deux minutes. Restez à l\'arrêt, moteur tournant.</p><div class="pbar"><i id="scanBar" style="width:0%"></i></div><p class="note" id="scanTxt">0 donnée trouvée</p>', { kicker: 'Données Alfa', ms: 0 });
+  say('Je fouille le calculateur, monsieur. Une à deux minutes.');
+  const found = await o.scanMfr((f, n) => { const b = $('scanBar'), t = $('scanTxt'); if (b) b.style.width = Math.round(f * 100) + '%'; if (t) t.textContent = n + ' données trouvées'; });
+  const s = S(), cool = s.coolant, ext = typeof wxNow !== 'undefined' && wxNow ? wxNow.temperature : null;
+  const cands = { oil: [], ext: [] };
+  Object.entries(found).filter(([did]) => !MFR_DIDS[did]).forEach(([did, b]) => Object.keys(TEMP_F).forEach(f => {
+    if (f !== 'A-40' && b.length < 2) return; if (f === 'B-40' && b.length !== 2) return;
+    const v = decodeTemp(b, f); if (v == null) return;
+    if (cool != null && cool >= 60 && v >= cool - 15 && v <= cool + 25 && v > 50) cands.oil.push({ did, f, v });
+    if (ext != null && Math.abs(v - ext) <= 4 && v > -30 && v < 50) cands.ext.push({ did, f, v });
+  }));
+  store.set('scanFound', { at: Date.now(), cool, ext, found: Object.fromEntries(Object.entries(found).map(([k, v]) => [k, v.map(x => hex2(x)).join(' ')])) });
+  const row = (k, c) => `<li><b>22 ${c.did}</b> · ${c.f} → ${c.v} °C <button class="btn" data-pick="${k}|${c.did}|${c.f}" type="button">C'est ${k === 'oil' ? "l'huile" : "l'extérieur"}</button></li>`;
+  holo('Données Alfa trouvées', `<p>${Object.keys(found).length} données répondent. Eau actuellement à ${fr(cool)} °C${ext != null ? ', météo ' + ext + ' °C' : ''}.</p>
+    <p class="label">Huile possible</p><ul class="rlist">${cands.oil.slice(0, 6).map(c => row('oil', c)).join('') || '<li class="empty">Aucune piste (moteur pas assez chaud ?)</li>'}</ul>
+    <p class="label">Extérieur possible</p><ul class="rlist">${cands.ext.slice(0, 6).map(c => row('ext', c)).join('') || '<li class="empty">Aucune piste</li>'}</ul>
+    <p class="note">Choisissez la ligne qui suit le mieux la réalité (l'huile monte un peu au-dessus de l'eau une fois chaude). Le « Rapport OBD » liste tout pour me l'envoyer.</p>`, { kicker: 'Données Alfa', ms: 0 });
+  document.querySelectorAll('[data-pick]').forEach(bt => bt.addEventListener('click', () => {
+    const [k, did, f] = bt.dataset.pick.split('|'); store.set(k === 'oil' ? 'oilDid' : 'extDid', { did, f });
+    say(k === 'oil' ? "Entendu, monsieur. J'affiche désormais la température d'huile à partir de cette donnée." : "Entendu. J'utilise cette donnée pour la température extérieure.");
+  }));
+  say(cands.oil.length ? `Terminé, monsieur. ${Object.keys(found).length} données trouvées, dont ${cands.oil.length} pistes pour l'huile. Choisissez à l'écran.` : `Terminé, monsieur. ${Object.keys(found).length} données trouvées, mais rien qui ressemble clairement à l'huile.`);
+}
+function obdReport() {
+  const o = liveObd(), sc = store.get('scanFound', null), sig = store.get('dnaSig', null), oil = store.get('oilDid', null), ext = store.get('extDid', null);
+  const mv = o ? o.mfr.vals : {};
+  holo('Rapport OBD', `<p>${o ? `Connecté à ${esc(o.label)}${o.stn ? ' (puce OBDLink)' : ''}, protocole ${esc(o.proto || '?')}, en-tête constructeur ${esc(o.mfr.hdr || 'aucun')}.` : 'OBD non connecté.'}</p>
+    <p class="label">Données standard</p><p class="note">${o ? [...o.sup].sort().join(' ') : '—'}</p>
+    <p class="label">Données Alfa (mode 22)</p><ul class="rlist">${Object.entries(MFR_DIDS).map(([d, m]) => `<li><span>22 ${d}</span><span>${esc(m.name)}</span><b>${mv[d] ? esc(String(m.f(mv[d]))) + ' ' + m.unit : 'pas de réponse'}</b></li>`).join('')}</ul>
+    <p class="note">Huile : ${oil ? '22 ' + oil.did + ' (' + oil.f + ')' : 'non trouvée'} · Extérieur : ${ext ? '22 ' + ext.did + ' (' + ext.f + ')' : 'météo'} · DNA : ${sig ? sig.id + ' octet ' + (sig.byte + 1) : 'non appris'}</p>
+    ${sc ? `<p class="label">Dernier scanner (${Object.keys(sc.found).length} données, eau ${fr(sc.cool)} °C)</p><p class="note" style="font-family:var(--f-mono);font-size:11px;word-break:break-all">${Object.entries(sc.found).slice(0, 120).map(([k, v]) => k + '=' + v).join(' · ')}</p>` : ''}
+    <p class="note">Faites une capture d'écran de cette fenêtre et envoyez-la : je pourrai affiner les décodages.</p>`, { kicker: 'Données Alfa', ms: 0 });
+}
+$('dnaLearnBtn').addEventListener('click', learnDna);
+$('scanBtn').addEventListener('click', scanAlfa);
+$('obdRepBtn').addEventListener('click', obdReport);
+// la voiture change de mode DNA : l'interface suit
+function onCarDna(m) { if (m && m !== dna) { setDna(m); } }
+
 function runDiag(quiet) {
   if (diagBusy) return Promise.resolve({ ok: false, raison: 'diagnostic déjà en cours' });
   if (source instanceof ObdSource && source.connected) return runRealDiag(quiet);
@@ -2224,6 +2450,7 @@ function adoptObd(obd) {
   source = obd;
   const hello = () => `Liaison établie avec ${obd.label}. ${obd.sup.size} données disponibles${obd.sup.has('5C') ? ", dont la température d'huile" : ", mais pas la température d'huile en standard"}. Tous les systèmes sont en ligne, monsieur.`;
   obd.onLost = () => { setObdUi(); say('Liaison OBD perdue. Je tente de me reconnecter, monsieur.'); };
+  obd.onDna = m => onCarDna(m);
   obd.onBack = () => { const first = !obd.everConnected; obd.everConnected = true; setObdUi(); say(first ? hello() : 'Liaison OBD rétablie.'); };
   setObdUi();
   return hello;
@@ -2448,6 +2675,9 @@ function breakLocal(q) {
     if (/^(non|pas maintenant|plus tard|ca va|laisse|ne t inquiete)\b/.test(t)) { BRK.pending = null; say('Très bien. Je vous le reproposerai dans une demi-heure.'); return true; }
   }
   if (/(je suis fatigue|je fatigue|j ai sommeil|je m endors|pause cafe|faire une pause|ou (faire une pause|m arreter|s arreter)|propose (moi )?une pause|besoin d une pause|trouve (moi )?une (pause|aire))/.test(t)) { proposeBreak(true); return true; }
+  if (/(apprends?|apprentissage|detecte|reconnais).{0,12}\bdna\b/.test(t)) { learnDna(); return true; }
+  if (/(cherche|scanne?|trouve).{0,25}(donnees alfa|calculateur|temperature d huile|huile)/.test(t)) { scanAlfa(); return true; }
+  if (/rapport obd/.test(t)) { obdReport(); return true; }
   if (/^(lance |ouvre |arme |demarre )?(le )?(banc|banc de puissance|dyno)( de puissance)?$/.test(t)) { openDyno(); say("Banc armé, monsieur. Passez la 3e vers 1 500 tours, sur du plat, puis pied au plancher jusqu'à 4 500."); return true; }
   return false;
 }
@@ -2973,6 +3203,8 @@ async function fetchWeather(lat, lon, name) {
   if (!name) { wxNow = w; wxNow.at = Date.now(); }
   return w;
 }
+// température extérieure de secours (météo à la position), rafraîchie toutes les 20 min
+setInterval(() => { const p = lastPosition(); if (p && (!wxNow || Date.now() - wxNow.at > 1200000)) fetchWeather(p.lat, p.lon).catch(() => {}); }, 60000);
 function lastPosition() {
   if (nav.gps) return nav.gps;
   const p = store.get('lastPos', null); return p && p.lat ? p : null;
