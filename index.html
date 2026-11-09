@@ -850,7 +850,7 @@ button{cursor:pointer}
         <div class="diag">
           <div class="ptitle"><span class="label">Codes défaut</span><button class="btn" id="diagBtn" type="button">Lancer le diagnostic</button></div>
           <div id="diagOut"><p class="note">Lit les codes d'erreur du calculateur et les explique en français.</p></div>
-          <div class="ptitle" style="margin-top:10px"><span class="label">Données Alfa</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="dnaLearnBtn" type="button">Apprendre le DNA</button><button class="btn" id="obdRepBtn" type="button">Rapport OBD</button></span></div>
+          <div class="ptitle" style="margin-top:10px"><span class="label">Données Alfa</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="fapBtn" type="button">Lire le FAP</button><button class="btn" id="dnaLearnBtn" type="button">Apprendre le DNA</button><button class="btn" id="obdRepBtn" type="button">Rapport OBD</button></span></div>
         </div>
       </div>
     </section>
@@ -1250,9 +1250,6 @@ class ObdSource {
       if (!this.sup.has(hex2(base + 0x20))) break;
     }
     if (!this.sup.size) throw new Error("l'adaptateur répond, mais pas la voiture. Le contact est-il mis ?");
-    this.proto = ((await this.cmd('ATDPN', 1500)).match(/A?([0-9A-C])\s*$/i) || [])[1] || '6';
-    this.stn = /STN/i.test(await this.cmd('STI', 1500)); // puce OBDLink : écoute du réseau plus robuste (STMA)
-    try { await this.probeMfr(); } catch (e) {}
     this.lost = false; this.connected = true; this.loop();
   }
   // Liaison coupée : toutes les valeurs passent à NONE, pas de simulation, et on retente toutes les 4 s
@@ -1293,7 +1290,8 @@ class ObdSource {
     };
   }
   _cmd(c, timeout) {
-    return new Promise(res => {
+    return new Promise(res0 => {
+      const res = r => { (this.journal = this.journal || []).push(c + ' → ' + String(r).replace(/[\r\n]+/g, ' ').trim().slice(0, 60)); if (this.journal.length > 120) this.journal.shift(); res0(r); };
       this.pending = { res, t: setTimeout(() => { this.pending = null; res(''); }, timeout) };
       Promise.resolve().then(() => this.link.write(c + '\r'))
         .catch(() => { if (this.pending) { clearTimeout(this.pending.t); this.pending = null; } res(''); });
@@ -1308,7 +1306,7 @@ class ObdSource {
     if (pid === 'RV') { const m = (await this.cmd('ATRV')).match(/(\d+(\.\d+)?)V/); if (m) this.raw.RV = parseFloat(m[1]); return; }
     if (!this.sup.has(pid)) return;
     const b = this.parse(await this.cmd('01' + pid), pid);
-    if (pid === '0C') { this.miss = b ? 0 : (this.miss || 0) + 1; if (this.miss >= 4) { this.miss = 0; try { await this.resetRx(); } catch (e) {} } }
+    if (pid === '0C') { this.miss = b ? 0 : (this.miss || 0) + 1; if (this.miss >= 6) { this.miss = 0; const run = () => this.reinit(); const q = (this.q || Promise.resolve()).then(run, run); this.q = q.catch(() => {}); await q; } }
     if (!b) return;
     this.raw[pid] = b;
     if (pid === '0D') { const now = performance.now(); if (this.tS) this.accRaw = (b[0] - this.vS) / Math.max(0.05, (now - this.tS) / 1000); this.vS = b[0]; this.tS = now; }
@@ -1319,13 +1317,27 @@ class ObdSource {
       if (this.task) { this.idle = true; await new Promise(r => setTimeout(r, 200)); continue; } // scanner, apprentissage ou diagnostic : on laisse la main
       this.idle = false;
       for (const p of FAST) await this.read(p); await this.read(SLOW[this.slowI++ % SLOW.length]);
-      const now = Date.now();
-      if (this.mfr.hdr && now - this.lastMfr > 8000) { this.lastMfr = now; try { await this.readMfr(); } catch (e) {} }
-      const sig = store.get('dnaSig', null);
-      if (sig && now - this.lastDna > 2500) { this.lastDna = now; try { await this.readDna(sig); } catch (e) {} }
     }
   }
 
+  // Remet l'adaptateur exactement comme à la connexion (sans refaire le Bluetooth)
+  async reinit() {
+    for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATSP0']) await this._cmd(c, 2500);
+    await this._cmd('0100', 8000);
+  }
+  // Lecture du FAP à la demande : protocole constructeur, puis retour à la normale garanti
+  async readFapNow() {
+    const release = await this.lock('fap');
+    try {
+      this.proto = ((await this.cmd('ATDPN', 1500)).match(/A?([0-9A-C])\s*$/i) || [])[1] || '6';
+      if (!this.mfr.hdr) await this.probeMfr();
+      if (this.mfr.hdr) { Object.assign(this.mfr.vals, await this.mfrBatch(Object.keys(MFR_DIDS))); this.mfr.at = Date.now(); }
+    } catch (e) {} finally {
+      const run = () => this.reinit(); const p = (this.q || Promise.resolve()).then(run, run); this.q = p.catch(() => {}); await p;
+      release();
+    }
+    return !!this.mfr.hdr;
+  }
   // Réserve l'adaptateur pour une tâche longue : on attend que la boucle de lecture ait fini son tour (pas de commandes mélangées)
   async lock(name) {
     while (this.task) await new Promise(r => setTimeout(r, 200));
@@ -2345,6 +2357,7 @@ async function learnDna() {
   const o = liveObd(); if (!o) { say("Il me faut l'OBD connecté, monsieur, moteur tournant."); return; }
   if (o.task) { say('Je suis déjà occupé avec le calculateur, monsieur.'); return; }
   const release = await o.lock('dna'); const cap = {};
+  o.proto = ((await o.cmd('ATDPN', 1500)).match(/A?([0-9A-C])\s*$/i) || [])[1] || '6'; o.stn = /STN/i.test(await o.cmd('STI', 1500));
   try {
     holo('Apprentissage DNA', '<p>Moteur tournant, à l\'arrêt. Suivez mes instructions : je vais écouter le réseau de la voiture pendant que vous tournez le sélecteur.</p><p class="note" id="dnaStep">Préparation…</p>', { kicker: 'Données Alfa', ms: 0 });
     for (const [k, label] of [['N', 'N, Natural'], ['D', 'D, Dynamic'], ['A', 'A, All-weather'], ['N2', 'N, Natural, une dernière fois']]) {
@@ -2362,10 +2375,10 @@ async function learnDna() {
       return;
     }
     const b = res[0]; store.set('dnaSig', { id: b.id, byte: b.byte, mask: b.mask, vals: b.vals, at: Date.now() });
-    holo('Apprentissage DNA', `<p>Trouvé : message <b>${b.id}</b>, octet ${b.byte + 1}. N = ${hex2(b.vals.N)}, D = ${hex2(b.vals.D)}, A = ${hex2(b.vals.A)}.</p><p class="note">L'écran suivra maintenant le sélecteur de la voiture. ${res.length > 1 ? (res.length - 1) + ' autre(s) piste(s) gardée(s) en réserve.' : ''}</p>`, { kicker: 'Données Alfa', ms: 30000 });
+    holo('Apprentissage DNA', `<p>Trouvé : message <b>${b.id}</b>, octet ${b.byte + 1}. N = ${hex2(b.vals.N)}, D = ${hex2(b.vals.D)}, A = ${hex2(b.vals.A)}.</p><p class="note">Faites une capture de cette fenêtre et du « Rapport OBD » : une fois la piste vérifiée, j'activerai le suivi automatique du sélecteur. ${res.length > 1 ? (res.length - 1) + ' autre(s) piste(s) gardée(s) en réserve.' : ''}</p>`, { kicker: 'Données Alfa', ms: 30000 });
     store.set('dnaAlt', res.slice(1, 4).map(x => ({ id: x.id, byte: x.byte, mask: x.mask, vals: x.vals })));
-    say('Appris, monsieur. Je suis désormais le sélecteur DNA de la voiture.');
-  } finally { release(); }
+    say("J'ai une piste pour le sélecteur DNA, monsieur. Envoyez-moi le rapport pour que je la vérifie.");
+  } finally { const run = () => o.reinit(); const q = (o.q || Promise.resolve()).then(run, run); o.q = q.catch(() => {}); await q; release(); }
 }
 function obdReport() {
   const o = liveObd(), sig = store.get('dnaSig', null), dl = store.get('dnaLast', null);
@@ -2373,10 +2386,22 @@ function obdReport() {
   holo('Rapport OBD', `<p>${o ? `Connecté à ${esc(o.label)}${o.stn ? ' (puce OBDLink)' : ''}, protocole ${esc(o.proto || '?')}, en-tête constructeur ${esc(o.mfr.hdr || 'aucun')}.` : 'OBD non connecté.'}</p>
     <p class="label">Données standard</p><p class="note">${o ? [...o.sup].sort().join(' ') : '—'}</p>
     <p class="label">Données Alfa (mode 22)</p><ul class="rlist">${Object.entries(MFR_DIDS).map(([d, m]) => `<li><span>22 ${d}</span><span>${esc(m.name)}</span><b>${mv[d] ? esc(String(m.f(mv[d]))) + ' ' + m.unit : 'pas de réponse'}</b></li>`).join('')}</ul>
+    <p class="label">Derniers échanges avec l'adaptateur</p><p class="note" style="font-family:var(--f-mono);font-size:10.5px;word-break:break-all">${o && o.journal ? o.journal.slice(-40).map(esc).join('<br>') : '—'}</p>
     <p class="note">Extérieur : météo · DNA : ${sig ? sig.id + ' octet ' + (sig.byte + 1) : 'non appris'}${dl ? ' · dernier apprentissage : ' + esc(dl) : ''}</p>
     <p class="note">Faites une capture d'écran de cette fenêtre et envoyez-la : je pourrai affiner les décodages.</p>`, { kicker: 'Données Alfa', ms: 0 });
 }
 $('dnaLearnBtn').addEventListener('click', learnDna);
+async function readFap(quiet) {
+  const o = liveObd(); if (!o) { if (!quiet) say("Il me faut l'OBD connecté, monsieur."); return; }
+  if (!quiet) say('Je consulte le filtre à particules, monsieur. Quelques secondes.');
+  const ok = await o.readFapNow(), s = S();
+  if (quiet) return;
+  if (!ok) { say("Le calculateur ne me donne pas l'état du FAP, monsieur. Les autres données restent affichées."); return; }
+  say(`Filtre à particules chargé à ${fr(s.soot)} %${s.regenKm != null ? ', ' + s.regenKm + ' kilomètres depuis la dernière régénération' : ''}${s.regen ? '. Une régénération est en cours : évitez de couper le moteur.' : '.'}`);
+}
+$('fapBtn').addEventListener('click', () => readFap(false));
+// FAP lu automatiquement 20 s après la connexion puis toutes les 5 minutes (quelques secondes de pause des autres données)
+setInterval(() => { const o = liveObd(); if (!o || o.task) return; if (!o.fapAt) o.fapAt = Date.now() - 280000; if (Date.now() - o.fapAt > 300000) { o.fapAt = Date.now(); readFap(true); } }, 10000);
 $('obdRepBtn').addEventListener('click', obdReport);
 // la voiture change de mode DNA : l'interface suit
 function onCarDna(m) { if (m && m !== dna) { setDna(m); } }
@@ -2649,6 +2674,7 @@ function breakLocal(q) {
   if (/(je suis fatigue|je fatigue|j ai sommeil|je m endors|pause cafe|faire une pause|ou (faire une pause|m arreter|s arreter)|propose (moi )?une pause|besoin d une pause|trouve (moi )?une (pause|aire))/.test(t)) { proposeBreak(true); return true; }
   if (/(apprends?|apprentissage|detecte|reconnais).{0,12}\bdna\b/.test(t)) { learnDna(); return true; }
   if (/rapport obd/.test(t)) { obdReport(); return true; }
+  if (/\b(fap|filtre a particules)\b/.test(t) && /(lis|lire|etat|niveau|ou en est|combien)/.test(t)) { readFap(false); return true; }
   if (/^(lance |ouvre |arme |demarre )?(le )?(banc|banc de puissance|dyno)( de puissance)?$/.test(t)) { openDyno(); say("Banc armé, monsieur. Passez la 3e vers 1 500 tours, sur du plat, puis pied au plancher jusqu'à 4 500."); return true; }
   return false;
 }
