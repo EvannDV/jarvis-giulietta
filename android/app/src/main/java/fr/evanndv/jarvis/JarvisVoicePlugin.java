@@ -1,7 +1,9 @@
 package fr.evanndv.jarvis;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
+import android.media.AudioManager;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -33,6 +35,44 @@ public class JarvisVoicePlugin extends Plugin {
 
     private SpeechRecognizer recognizer;
     private final Handler main = new Handler(Looper.getMainLooper());
+
+    // Le « bip » de début / fin d'écoute d'Android : coupé pendant l'écoute permanente.
+    // On coupe les sons système le temps de l'écoute, et le son média seulement si aucune musique ne joue.
+    private static final int[] BEEP_STREAMS = { AudioManager.STREAM_SYSTEM, AudioManager.STREAM_NOTIFICATION, AudioManager.STREAM_RING };
+    private boolean muted = false, musicMuted = false;
+    private int session = 0;
+
+    private AudioManager audio() { return (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE); }
+
+    private void muteBeep() {
+        if (muted) return;
+        AudioManager am = audio(); if (am == null) return;
+        for (int st : BEEP_STREAMS) { try { am.adjustStreamVolume(st, AudioManager.ADJUST_MUTE, 0); } catch (Exception ignored) { } }
+        musicMuted = !am.isMusicActive();
+        if (musicMuted) { try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, 0); } catch (Exception e) { musicMuted = false; } }
+        muted = true;
+    }
+
+    private void unmuteNow() {
+        if (!muted) return;
+        AudioManager am = audio(); if (am == null) return;
+        for (int st : BEEP_STREAMS) { try { am.adjustStreamVolume(st, AudioManager.ADJUST_UNMUTE, 0); } catch (Exception ignored) { } }
+        if (musicMuted) { try { am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_UNMUTE, 0); } catch (Exception ignored) { } }
+        muted = false; musicMuted = false;
+    }
+
+    // Rétablit le son un peu après la fin de l'écoute, sauf si une nouvelle écoute a démarré entre-temps (pas de bip entre deux écoutes)
+    private void unmuteLater() {
+        final int s = session;
+        main.postDelayed(() -> { if (s == session) unmuteNow(); }, 700);
+    }
+
+    /** Rétablit le son tout de suite (Jarvis va parler). */
+    @PluginMethod
+    public void unmute(PluginCall call) {
+        main.post(() -> { session++; unmuteNow(); });
+        call.resolve();
+    }
 
     @PluginMethod
     public void available(PluginCall call) {
@@ -71,8 +111,11 @@ public class JarvisVoicePlugin extends Plugin {
 
     private void begin(PluginCall call) {
         final boolean offline = call.getBoolean("offline", false);
+        final boolean quiet = call.getBoolean("quiet", false);
         main.post(() -> {
             try {
+                session++;
+                if (quiet) muteBeep();
                 if (recognizer != null) recognizer.destroy();
                 recognizer = SpeechRecognizer.createSpeechRecognizer(getContext());
                 recognizer.setRecognitionListener(new RecognitionListener() {
@@ -81,8 +124,8 @@ public class JarvisVoicePlugin extends Plugin {
                     @Override public void onRmsChanged(float rmsdB) { }
                     @Override public void onBufferReceived(byte[] buffer) { }
                     @Override public void onEndOfSpeech() { emit("state", "state", "processing"); }
-                    @Override public void onError(int error) { emit("error", "code", error); }
-                    @Override public void onResults(Bundle results) { emit("result", "text", best(results)); }
+                    @Override public void onError(int error) { if (quiet) unmuteLater(); emit("error", "code", error); }
+                    @Override public void onResults(Bundle results) { if (quiet) unmuteLater(); emit("result", "text", best(results)); }
                     @Override public void onPartialResults(Bundle partialResults) { emit("partial", "text", best(partialResults)); }
                     @Override public void onEvent(int eventType, Bundle params) { }
                 });
@@ -99,6 +142,7 @@ public class JarvisVoicePlugin extends Plugin {
                 recognizer.startListening(intent);
                 call.resolve();
             } catch (Exception e) {
+                unmuteNow();
                 call.reject("Reconnaissance vocale indisponible : " + e.getMessage());
             }
         });
@@ -106,13 +150,19 @@ public class JarvisVoicePlugin extends Plugin {
 
     @PluginMethod
     public void stop(PluginCall call) {
-        main.post(() -> { if (recognizer != null) recognizer.cancel(); });
+        main.post(() -> { session++; if (recognizer != null) recognizer.cancel(); unmuteNow(); });
         call.resolve();
     }
 
     @Override
+    protected void handleOnPause() { // appli en arrière-plan : jamais de son laissé coupé
+        main.post(() -> { session++; unmuteNow(); });
+        super.handleOnPause();
+    }
+
+    @Override
     protected void handleOnDestroy() {
-        main.post(() -> { if (recognizer != null) { recognizer.destroy(); recognizer = null; } });
+        main.post(() -> { session++; unmuteNow(); if (recognizer != null) { recognizer.destroy(); recognizer = null; } });
         super.handleOnDestroy();
     }
 }

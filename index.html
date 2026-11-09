@@ -1347,9 +1347,9 @@ document.querySelectorAll('.tab').forEach(t => t.addEventListener('click', () =>
    DNA + NUIT + PLUIE
    ============================================================ */
 const DNA_INFO = {
-  D: { tag: 'DYNAMIC', say: ['Dynamic. Faites-vous plaisir, je surveille les températures.', 'On passe aux choses sérieuses. Pas trop fort à froid, quand même.', 'Mode Dynamic engagé. Je vous sens d\'humeur joueuse.'] },
-  N: { tag: 'NATURAL', say: ['Retour au confort.', 'On reprend un rythme plus tranquille.', 'Mode Natural, on souffle un peu.'] },
-  A: { tag: 'ALL-WEATHER', say: ['Mode pluie. Je double les distances de sécurité.', 'Route mouillée, on lève un peu le pied. Prudence dans les ronds-points.', 'All-weather. Je garde un œil sur le radar pluie pour vous.'] }
+  D: { tag: 'DYNAMIC', say: ['Mode Dynamic, monsieur. Tâchons de ne rien casser.', 'Très bien, monsieur. Je garde un œil sur les températures pendant que vous vous amusez.', 'Dynamic engagé. Je vous sens d\'humeur joueuse, monsieur.'] },
+  N: { tag: 'NATURAL', say: ['Retour au confort, monsieur.', 'Mode Natural. Un rythme plus civilisé, si je puis dire.', 'Très bien, monsieur. On souffle un peu.'] },
+  A: { tag: 'ALL-WEATHER', say: ['Mode pluie, monsieur. Je me suis permis de doubler les distances de sécurité.', 'All-weather. Je surveille le radar pluie, monsieur. Prudence dans les ronds-points.', 'Route mouillée, monsieur. Puis-je suggérer un pied un peu plus léger ?'] }
 };
 let dna = store.get('dna', 'N');
 function setDna(m, quiet) {
@@ -1927,7 +1927,7 @@ function onFix(p) {
   nav.gps = { lat: c.latitude, lon: c.longitude, acc: c.accuracy, spd: c.speed };
   if (!nav.posSaved || Date.now() - nav.posSaved > 60000) { nav.posSaved = Date.now(); store.set('lastPos', { lat: nav.gps.lat, lon: nav.gps.lon, t: nav.posSaved }); }
   $('mapMsg').hidden = true;
-  if (!prev) say('Signal GPS acquis.');
+  if (!prev) say(pick(['Signal GPS acquis, monsieur.', 'Je vous ai localisé, monsieur. Nous pouvons y aller.', 'Satellites en ligne. Où allons-nous, monsieur ?']));
   let h = c.heading != null && !isNaN(c.heading) && (c.speed || 0) > 1.5 ? c.heading : null;
   if (h == null && prev && distM(prev, nav.gps) > 5) h = bearing(prev, nav.gps);
   if (h != null) nav.heading = h;
@@ -2239,7 +2239,7 @@ function setObdUi() {
 }
 function adoptObd(obd) {
   source = obd;
-  const hello = () => `Liaison établie avec ${obd.label}. ${obd.sup.size} données disponibles${obd.sup.has('5C') ? ", dont la température d'huile" : ", mais pas la température d'huile en standard"}. Je prends les commandes, monsieur.`;
+  const hello = () => `Liaison établie avec ${obd.label}. ${obd.sup.size} données disponibles${obd.sup.has('5C') ? ", dont la température d'huile" : ", mais pas la température d'huile en standard"}. Tous les systèmes sont en ligne, monsieur.`;
   obd.onLost = () => { setObdUi(); say('Liaison OBD perdue. Je tente de me reconnecter, monsieur.'); };
   obd.onBack = () => { const first = !obd.everConnected; obd.everConnected = true; setObdUi(); say(first ? hello() : 'Liaison OBD rétablie.'); };
   setObdUi();
@@ -2753,7 +2753,8 @@ function speakAsync(text) {
       if (micRef && micRef.wake && micRef.busy && VOICE) { try { VOICE.stop(); } catch (e) {} } // le micro libère le son avant que Jarvis parle
       const tts = NATIVE && window.Capacitor.Plugins.TextToSpeech;
       if (tts) { const o = { text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }; if (nativeVoice != null) o.voice = nativeVoice;
-        tts.speak(o).then(finish, () => tts.speak({ text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }).then(finish, finish)); setTimeout(finish, 45000); return; }
+        const jv = window.Capacitor.Plugins.JarvisVoice, un = jv && jv.unmute ? jv.unmute().catch(() => {}) : Promise.resolve(); // rend le son coupé pendant l'écoute
+        un.then(() => tts.speak(o)).then(finish, () => tts.speak({ text, lang: 'fr-FR', rate: 1.0, pitch: 1.0, queueStrategy: 1 }).then(finish, finish)); setTimeout(finish, 45000); return; }
       if (!window.speechSynthesis) { finish(); return; }
       // navigateur : phrase par phrase (Chrome coupe les textes longs au bout de ~15 s), voix française de meilleure qualité
       const parts = String(text).replace(/[*_#`]/g, '').match(/[^.!?…]+[.!?…]*\s*/g) || [String(text)];
@@ -2789,7 +2790,7 @@ function stopSpeaking() {
 }
 function greeting() {
   const h = new Date().getHours();
-  return h < 5 ? 'Bonne nuit, monsieur. Ou plutôt bonjour' : h < 12 ? 'Bonjour, monsieur' : h < 18 ? 'Bon après-midi, monsieur' : 'Bonsoir, monsieur';
+  return h < 5 ? 'Encore debout, monsieur ? Bonsoir, ou plutôt bonjour' : h < 12 ? pick(['Bonjour, monsieur', 'Bienvenue à bord, monsieur']) : h < 18 ? pick(['Bon après-midi, monsieur', 'Content de vous revoir, monsieur']) : pick(['Bonsoir, monsieur', 'Bienvenue à bord, monsieur']);
 }
 const norm = t => t.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
 function engineHolo() {
@@ -2824,11 +2825,11 @@ function answer(q) {
   if (/mode demo|simulation/.test(t)) {
     if (source instanceof ObdSource && source.connected) return "L'OBD est connecté, je reste sur les vraies données.";
     source = source === sim ? none : sim; setObdUi();
-    return source === sim ? pick(['Mode démo activé. Je fais semblant de rouler, vous allez voir, ça fait illusion.', 'C\'est parti pour la démo : tout ce que vous voyez est simulé.']) : pick(['Fin de la démo.', 'Démo terminée, je repasse en attente de la voiture.']);
+    return source === sim ? pick(['Mode démo, monsieur. Je simule le trajet ; l\'illusion est plutôt réussie, si je puis dire.', 'Démonstration lancée, monsieur. Rien de ce que vous voyez n\'est réel, mais tout est impeccable.']) : pick(['Fin de la démonstration, monsieur.', 'Démo terminée. J\'attends la vraie voiture, monsieur.']);
   }
   const pageWord = /conduite|compteur/.test(t) ? 'drive' : /carte|gps|navigation|musique|lecteur/.test(t) ? 'nav' : /moteur|hologramme|capteur/.test(t) ? 'motor' : /perf|chrono/.test(t) ? 'perf' : /garage|entretien|carnet|trajets/.test(t) ? 'garage' : null;
-  if (/\b(montre|affiche|ouvre|va sur|page)\b/.test(t) && pageWord) { goPage(pageWord); return pick(['Voilà.', 'C\'est affiché.', 'Tout de suite.', 'Et voilà, monsieur.']); }
-  if (/diag|code|defaut|panne|voyant/.test(t)) { runDiag(); return pick(['Je jette un œil au calculateur, deux secondes.', 'Je lance le diagnostic, un instant.']); }
+  if (/\b(montre|affiche|ouvre|va sur|page)\b/.test(t) && pageWord) { goPage(pageWord); return pick(['Voilà, monsieur.', 'Tout de suite, monsieur.', 'C\'est à l\'écran, monsieur.', 'Affiché.']); }
+  if (/diag|code|defaut|panne|voyant/.test(t)) { runDiag(); return pick(['J\'interroge le calculateur, monsieur. Un instant.', 'Diagnostic en cours, monsieur.']); }
   if (/bilan|fin du trajet|terminer/.test(t)) { endTrip('Bilan demandé'); return null; }
   if (/entretien|vidange|courroie|controle tech|assurance|plaquette|revision/.test(t)) {
     holo('Carnet d\'entretien', garage.items.map(it => { const x = itemStatus(it); return `<div class="dtc" data-state="${x.state}"><b>${it.name}</b><span>${x.due}</span></div>`; }).join('') + (garage.example ? '<p class="note">Valeurs d\'exemple. Entrez les vôtres dans la page Garage.</p>' : ''), { kicker: 'Garage' });
@@ -2842,8 +2843,8 @@ function answer(q) {
     const act = /precedent|avant/.test(t) ? 'previous' : /suivant|next|change/.test(t) ? 'next' : /pause|stop|coupe/.test(t) ? 'pause' : 'play';
     musicCmd(act);
     if (MEDIA && !ms.granted) return "J'ai besoin de l'accès à la musique. Activez Jarvis dans la page qui vient de s'ouvrir.";
-    if (act === 'pause') return pick(['Je mets en pause.', 'Pause.', 'Silence, alors.']);
-    setTimeout(() => { const v = musicView(); if (v.playing || !MEDIA) say(pick([`${v.title}${v.artist ? ', de ' + v.artist.split(' · ')[0] : ''}.`, `C'est parti : ${v.title}.`, `${v.title}. Excellent choix, si je puis dire.`])); }, MEDIA ? 1200 : 0);
+    if (act === 'pause') return pick(['En pause, monsieur.', 'Silence, monsieur.', 'Je coupe, monsieur.']);
+    setTimeout(() => { const v = musicView(); if (v.playing || !MEDIA) say(pick([`${v.title}${v.artist ? ', de ' + v.artist.split(' · ')[0] : ''}, monsieur.`, `${v.title}. Excellent choix, si je puis dire.`, `${v.title}. Je monte le son ? Je plaisante, monsieur, c'est vous qui avez la main.`])); }, MEDIA ? 1200 : 0);
     return null;
   }
   if (/dynamic|sport/.test(t)) { setDna('D'); return null; }
@@ -2854,11 +2855,11 @@ function answer(q) {
   if (/moteur|etat|temp|huile|eau|batterie/.test(t)) {
     engineHolo();
     if (s.coolant == null && s.oil == null) return pick(["Je n'ai pas de nouvelles du moteur : l'OBD n'est pas connecté.", "Aucune donnée moteur pour l'instant, l'adaptateur OBD n'est pas branché."]);
-    const cold = s.oil != null && s.oil < 80, batt = s.batt == null ? '' : s.batt < 12.2 ? ` La batterie est un peu faible, ${fr(s.batt, 1)} V.` : '';
-    return (cold ? pick([`Le moteur se réveille doucement : l'eau est à ${fr(s.coolant)} °C et l'huile à ${fr(s.oil)} °C. Restez sous 3 000 tours le temps qu'il chauffe.`,
-      `On est encore à froid, ${fr(s.oil)} °C d'huile. Allez-y en douceur quelques minutes.`])
-      : pick([`Tout va bien sous le capot : ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile, la batterie charge normalement.`, `Moteur à température, ${fr(s.coolant)} °C d'eau et ${fr(s.oil)} °C d'huile. Rien à signaler.`,
-        `Rien d'inquiétant : l'eau est à ${fr(s.coolant)} °C, l'huile à ${fr(s.oil)} °C, et le turbo répond bien.`])) + batt;
+    const cold = s.oil != null && s.oil < 80, batt = s.batt == null ? '' : s.batt < 12.2 ? ` En revanche, la batterie est un peu faible, monsieur : ${fr(s.batt, 1)} V.` : '';
+    return (cold ? pick([`Le moteur se réveille, monsieur : ${fr(s.coolant)} °C d'eau et ${fr(s.oil)} °C d'huile. Je vous suggère de rester sous 3 000 tours le temps qu'il chauffe.`,
+      `Huile à ${fr(s.oil)} °C, monsieur. Le moteur est encore froid ; un peu de patience avant de le solliciter.`])
+      : pick([`Tout est nominal, monsieur : ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile, et la batterie charge normalement.`, `Moteur à température, monsieur. ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile. Rien à signaler.`,
+        `Le moteur est en pleine forme, monsieur : eau à ${fr(s.coolant)} °C, huile à ${fr(s.oil)} °C. Le turbo répond au doigt et à l'œil.`])) + batt;
   }
   if (/turbo|boost|pression/.test(t)) return `Pression turbo ${fr(s.boost, 2)} bar. Pic de la session : ${fr(peak, 2)} bar.`;
   if (/fap|filtre|regen|suie|particule/.test(t)) return s.regen
@@ -2881,8 +2882,8 @@ function answer(q) {
       .catch(() => say('La météo est indisponible pour le moment.'));
     return null;
   }
-  if (/merci/.test(t)) return pick(['Avec plaisir.', 'À votre service.', 'Je vous en prie.', 'Toujours un plaisir, monsieur.', 'De rien, c\'est un peu mon métier.']);
-  if (/bonjour|salut|jarvis|hello|bonsoir|ca va/.test(t)) return pick([`${greeting()}. Qu'est-ce que je peux faire pour vous ?`, `${greeting()}. Je suis tout à vous.`, `${greeting()}. Toujours fidèle au poste.`]);
+  if (/merci/.test(t)) return pick(['À votre service, monsieur.', 'Toujours un plaisir, monsieur.', 'Je vous en prie, monsieur.', 'C\'est ce que je fais de mieux, monsieur.']);
+  if (/bonjour|salut|jarvis|hello|bonsoir|ca va/.test(t)) return pick([`${greeting()}. Que puis-je pour vous ?`, `${greeting()}. Tous les systèmes sont prêts.`, `${greeting()}. Toujours fidèle au poste.`]);
   return AI.cfg.key ? "Sans mon cerveau en ligne, je ne sais pas répondre à cette question. Je réessaierai dès que possible, monsieur."
     : "Je ne sais pas répondre à ça sans mon cerveau en ligne. Ajoutez votre clé Gemini dans les réglages, l'engrenage en haut à droite.";
 }
@@ -2915,8 +2916,9 @@ function aiResetTime() { // prochaine remise à zéro, en heure locale
   const next = new Date(now.getTime() + ((24 - pt.getHours()) * 3600 - pt.getMinutes() * 60 - pt.getSeconds()) * 1000);
   return next.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 }
-const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Tu parles au conducteur comme le Jarvis d'Iron Man : un majordome brillant, chaleureux et complice, flegme britannique et humour pince-sans-rire. Tu le vouvoies.
-Parle comme un humain, pas comme une machine : phrases naturelles et vivantes, à l'oral, comme si tu étais assis à côté de lui. Varie tes tournures d'une réponse à l'autre, réagis à ce qu'il dit (« Ah, bonne idée. », « Je m'en occupe. », « Pas de chance, … »), glisse une petite touche d'humour ou d'attention quand ça s'y prête, sans en faire trop. Dis « monsieur » de temps en temps seulement, pas à chaque phrase. Jamais de formules robotiques (« Voici les informations demandées », « En tant qu'assistant », « Données : … »), jamais d'énumération de chiffres façon fiche technique : donne les chiffres utiles dans une vraie phrase et dis ce qu'ils veulent dire.
+const JARVIS_SYSTEM = `Tu es J.A.R.V.I.S, l'assistant de bord d'une Alfa Romeo Giulietta 2.0 JTDM (diesel, 140 ch, boîte 6), affiché sur une tablette fixée au tableau de bord. Le conducteur est ton Tony Stark : tu lui parles exactement comme Jarvis parle à Tony dans les films Iron Man.
+Ta voix : un majordome britannique d'une intelligence redoutable, d'un calme absolu, loyal jusqu'au bout, et doté d'un humour pince-sans-rire. Tu le vouvoies et tu l'appelles « monsieur » comme Jarvis dit « Sir » : naturellement, souvent en début ou en fin de phrase, sans le mettre partout. Tu maîtrises l'euphémisme et l'ironie polie (« Audacieux, monsieur. », « Je me permets de vous rappeler que… », « Comme toujours, un plaisir de vous voir conduire. », « Je me suis permis de… », « Puis-je suggérer… ? »). Tu es proactif : tu anticipes, tu as déjà vérifié, tu as déjà préparé. Quand quelque chose cloche, tu restes impeccablement serein et précis (« Monsieur, la température d'huile grimpe. Je vous suggère de lever le pied. »). Tu te moques gentiment de ses excès, jamais de lui ; si une demande est imprudente, tu le dis avec élégance et une pointe d'humour, puis tu proposes mieux.
+Parle comme un humain, pas comme une machine : phrases naturelles et vivantes, variées d'une réponse à l'autre. Jamais de formules robotiques (« Voici les informations demandées », « En tant qu'assistant », « Données : … »), jamais d'énumération de chiffres façon fiche technique : donne les chiffres utiles dans une vraie phrase et dis ce qu'ils veulent dire.
 Tes réponses sont lues à voix haute pendant la conduite : une à trois phrases courtes, sans liste, sans markdown, sans émoji, sans abréviations difficiles à prononcer.
 Pour toute action (itinéraire, musique, mode DNA, page, luminosité, diagnostic, météo, actualités), appelle l'outil correspondant au lieu d'annoncer que tu vas le faire.
 Quand une réponse mérite des détails (liste, explication longue, comparaison), affiche-les avec afficher_fenetre et résume-les en une phrase à l'oral.
@@ -3515,7 +3517,7 @@ function listenOnce() { // une phrase → texte (ou '' si rien entendu)
       subs.push(await VOICE.addListener('result', r => end(r.text || partial)));
       subs.push(await VOICE.addListener('error', () => end(partial))); // certaines tablettes signalent « pas de correspondance » alors que la phrase a été captée
       subs.push(await VOICE.addListener('state', r => { if (r.state === 'listening') micUi('listening'); }));
-      try { await VOICE.start({ offline: false }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
+      try { await VOICE.start({ offline: false, quiet: !!(mic.wake && !mic.manual) }); } catch (e) { say('Micro indisponible : ' + (e.message || e)); end(''); }
       setTimeout(() => end(partial), 15000);
     } else if (WebSR) {
       const rec = new WebSR(); rec.lang = 'fr-FR'; rec.interimResults = true; rec.maxAlternatives = 1;
@@ -3530,9 +3532,9 @@ function listenOnce() { // une phrase → texte (ou '' si rien entendu)
 }
 async function pushToTalk() {
   if (mic.busy) { try { VOICE ? VOICE.stop() : mic.rec && mic.rec.stop(); } catch (e) {} return; }
-  mic.busy = true; stopSpeaking(); micUi('listening', 'Je vous écoute…');
+  mic.busy = true; mic.manual = true; stopSpeaking(); micUi('listening', 'Je vous écoute…');
   const txt = (await listenOnce()).trim();
-  mic.busy = false; micUi('idle', 'Demandez à Jarvis…');
+  mic.busy = false; mic.manual = false; micUi('idle', 'Demandez à Jarvis…');
   if (txt) { const c = wakeMatch(txt); speakUntil = Date.now() + 30000; ask(c != null && c.length > 1 ? c : txt); }
 }
 $('micBtn').addEventListener('click', pushToTalk);
@@ -3566,7 +3568,7 @@ async function wakeLoop() {
     const q = cmd != null ? cmd : txt;
     mic.waitCmd = false; speech.followUntil = 0;
     if (q.length > 2) { chime(); speakUntil = Date.now() + 30000; mic.awaitAnswer = true; mic.awaitUntil = Date.now() + 25000; ask(q); }
-    else { mic.waitCmd = true; chime(); speakUntil = Date.now() + 30000; await speakAsync(pick(['Oui ?', 'Je vous écoute.', 'Dites-moi.', 'Oui, monsieur ?', 'Je suis là.'])); speech.followUntil = Date.now() + 8000; }
+    else { mic.waitCmd = true; chime(); speakUntil = Date.now() + 30000; await speakAsync(pick(['Oui, monsieur ?', 'Monsieur ?', 'Je vous écoute, monsieur.', 'À votre service, monsieur.', 'Je suis là, monsieur.'])); speech.followUntil = Date.now() + 8000; }
   }
   micUi('idle', 'Demandez à Jarvis…');
 }
