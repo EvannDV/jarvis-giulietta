@@ -741,7 +741,7 @@ button{cursor:pointer}
       <div class="panel gt-info" id="gtInfo">
         <div class="gt-row"><span class="label">Conso</span><b id="gtCons">--</b></div>
         <div class="gt-row"><span class="label">Autonomie</span><b id="gtRange">--</b></div>
-        <div class="gt-row"><span class="label">Huile · eau</span><b id="gtTemp">--</b></div>
+        <div class="gt-row"><span class="label">Eau</span><b id="gtTemp">--</b></div>
       </div>
 
       <div class="panel wx-spd" id="wxSpdP">
@@ -769,7 +769,7 @@ button{cursor:pointer}
           <span class="wx-sum" id="wxSum">Radar en attente de la position GPS…</span></div>
         <div class="panel wx-card"><span class="label">Visibilité &amp; chaussée</span>
           <div class="wx-mini"><div><span class="label">Ext.</span><b id="wxExt">--</b></div><div><span class="label">Verglas</span><b id="wxIce">--</b></div><div><span class="label">Vent</span><b id="wxWind">--</b></div></div>
-          <div class="wx-mini"><div><span class="label">Eau</span><b id="wxCool">--</b></div><div><span class="label">Huile</span><b id="wxOil">--</b></div><div><span class="label">Batterie</span><b id="wxBatt">--</b></div></div></div>
+          <div class="wx-mini"><div><span class="label">Eau</span><b id="wxCool">--</b></div><div><span class="label">FAP</span><b id="wxOil">--</b></div><div><span class="label">Batterie</span><b id="wxBatt">--</b></div></div></div>
       </div>
 
       <div class="engine">
@@ -782,7 +782,7 @@ button{cursor:pointer}
         </div>
         <div class="tiles">
           <div class="panel tile" id="tCool"><span class="label">Eau</span><div class="tv"><span id="cool">--</span><small>°C</small></div><div class="bar"><i></i></div><span class="state">--</span></div>
-          <div class="panel tile" id="tOil"><span class="label">Huile</span><div class="tv"><span id="oil">--</span><small>°C</small></div><div class="bar"><i></i></div><span class="state">--</span></div>
+          <div class="panel tile" id="tOil"><span class="label">Depuis régén.</span><div class="tv"><span id="oil">--</span><small>km</small></div><div class="bar"><i></i></div><span class="state">--</span></div>
           <div class="panel tile" id="tBatt"><span class="label">Batterie</span><div class="tv"><span id="batt">--</span><small>V</small></div><div class="bar"><i></i></div><span class="state">--</span></div>
           <div class="panel tile" id="tDpf"><span class="label">FAP · suie</span><div class="tv"><span id="soot">--</span><small>%</small></div><div class="bar"><i></i></div><span class="state">--</span></div>
         </div>
@@ -833,7 +833,7 @@ button{cursor:pointer}
         <div class="diag">
           <div class="ptitle"><span class="label">Codes défaut</span><button class="btn" id="diagBtn" type="button">Lancer le diagnostic</button></div>
           <div id="diagOut"><p class="note">Lit les codes d'erreur du calculateur et les explique en français.</p></div>
-          <div class="ptitle" style="margin-top:10px"><span class="label">Données Alfa</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="dnaLearnBtn" type="button">Apprendre le DNA</button><button class="btn" id="scanBtn" type="button">Chercher huile / ext.</button><button class="btn" id="obdRepBtn" type="button">Rapport OBD</button></span></div>
+          <div class="ptitle" style="margin-top:10px"><span class="label">Données Alfa</span><span style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn" id="dnaLearnBtn" type="button">Apprendre le DNA</button><button class="btn" id="obdRepBtn" type="button">Rapport OBD</button></span></div>
         </div>
       </div>
     </section>
@@ -1173,9 +1173,6 @@ const MFR_DIDS = {
   '380B': { name: 'Régénération en cours', unit: '', f: b => b[0] },
   '18DE': { name: 'Température échappement (brut)', unit: '', f: b => b.map(x => hex2(x)).join(' ') }
 };
-// Décodages courants des températures Bosch
-const TEMP_F = { 'A-40': b => b[0] - 40, 'B-40': b => b[1] - 40, 'AB/10-40': b => ((b[0] << 8) + b[1]) / 10 - 40, 'AB/10-273': b => ((b[0] << 8) + b[1]) / 10 - 273.1, 'AB/100': b => ((b[0] << 8) + b[1]) / 100, 'AB*0.02-40': b => ((b[0] << 8) + b[1]) * 0.02 - 40 };
-const decodeTemp = (b, f) => { try { const v = TEMP_F[f](b); return isFinite(v) ? Math.round(v) : null; } catch (e) { return null; } };
 function parseFrames(txt) { // « 1A0 01 02 … » ou « 18 DA F1 10 01 02 … »
   const out = [];
   (txt || '').toUpperCase().split(/[\r\n]+/).forEach(l => {
@@ -1293,7 +1290,9 @@ class ObdSource {
   async read(pid) {
     if (pid === 'RV') { const m = (await this.cmd('ATRV')).match(/(\d+(\.\d+)?)V/); if (m) this.raw.RV = parseFloat(m[1]); return; }
     if (!this.sup.has(pid)) return;
-    const b = this.parse(await this.cmd('01' + pid), pid); if (!b) return;
+    const b = this.parse(await this.cmd('01' + pid), pid);
+    if (pid === '0C') { this.miss = b ? 0 : (this.miss || 0) + 1; if (this.miss >= 4) { this.miss = 0; try { await this.resetRx(); } catch (e) {} } }
+    if (!b) return;
     this.raw[pid] = b;
     if (pid === '0D') { const now = performance.now(); if (this.tS) this.accRaw = (b[0] - this.vS) / Math.max(0.05, (now - this.tS) / 1000); this.vS = b[0]; this.tS = now; }
   }
@@ -1326,51 +1325,35 @@ class ObdSource {
     if (k < 0) return null;
     const h = c.slice(k + 6).match(/[0-9A-F]{2}/g); return h && h.length ? h.map(x => parseInt(x, 16)) : null;
   }
+  // En-tête « tout le monde » pour les données OBD standard (régime, eau…) : 7DF en 11 bits, 18DB33F1 en 29 bits
+  async stdHeader() { if (this.proto === '7' || this.proto === '9') { await this.cmd('ATCP18'); await this.cmd('ATSHDB33F1'); } else await this.cmd('ATSH7DF'); }
   async enter29() { if (this.proto !== '7') await this.cmd('ATTP7', 2500); await this.cmd('ATCP18'); await this.cmd('ATSHDA10F1'); }
-  async leave29() { if (this.proto !== '7') { await this.cmd('ATTP' + this.proto, 2500); await this.cmd('ATSH7DF'); } }
+  async leave29() { if (this.proto !== '7') await this.cmd('ATTP' + this.proto, 2500); await this.stdHeader(); }
+  async resetRx() { await this.cmd('ATCRA'); await this.cmd('ATAR'); await this.cmd('ATS0'); await this.cmd('ATH0'); await this.stdHeader(); }
   async probeMfr() {
     const t = async () => this.parse22(await this.cmd('2218E4', 1500), '18E4') || this.parse22(await this.cmd('223807', 1500), '3807');
     if (this.proto === '6' || this.proto === '8') {
-      await this.cmd('ATSH7E0');
-      if (await t()) { this.mfr.hdr = '7E0'; return; }
-      await this.cmd('ATSH7DF');
+      await this.cmd('ATSH7E0'); const ok11 = await t(); await this.stdHeader();
+      if (ok11) { this.mfr.hdr = '7E0'; return; }
     }
     await this.enter29(); const ok = await t(); await this.leave29();
     if (ok) this.mfr.hdr = '29';
   }
   async mfrBatch(dids) { // lit plusieurs identifiants d'un coup (un seul changement de protocole)
     const out = {};
-    if (this.mfr.hdr === '29') await this.enter29();
+    if (this.mfr.hdr === '29') await this.enter29(); else await this.cmd('ATSH7E0');
     try { for (const d of dids) { const b = this.parse22(await this.cmd('22' + d, 1200), d); if (b) out[d] = b; } }
-    finally { if (this.mfr.hdr === '29') await this.leave29(); }
+    finally { if (this.mfr.hdr === '29') await this.leave29(); else await this.stdHeader(); }
     return out;
   }
   async readMfr() {
-    const oil = store.get('oilDid', null), ext = store.get('extDid', null);
-    const dids = Object.keys(MFR_DIDS).concat(oil ? [oil.did] : [], ext ? [ext.did] : []);
-    const r = await this.mfrBatch([...new Set(dids)]);
+    const r = await this.mfrBatch(Object.keys(MFR_DIDS));
     Object.assign(this.mfr.vals, r); this.mfr.at = Date.now();
   }
-  // Scanner : interroge des centaines d'identifiants et repère ceux qui ressemblent à une température (huile, extérieur)
-  async scanMfr(progress) {
-    if (!this.mfr.hdr) { try { await this.probeMfr(); } catch (e) {} }
-    if (!this.mfr.hdr) this.mfr.hdr = this.proto === '7' ? '29' : '7E0'; // on tente quand même
-    const release = await this.lock('scan'); const found = {};
-    try {
-      if (this.mfr.hdr === '29') await this.enter29(); else await this.cmd('ATSH7E0');
-      const hi = ['18', '19', '13', '10', '38', '39', '30', '31'];
-      for (let a = 0; a < hi.length; a++) for (let lo = 0; lo < 256; lo++) {
-        const did = hi[a] + hex2(lo), b = this.parse22(await this.cmd('22' + did, 400), did);
-        if (b) found[did] = b;
-        if (lo % 16 === 0 && progress) progress((a * 256 + lo) / (hi.length * 256), Object.keys(found).length);
-      }
-    } finally { if (this.mfr.hdr === '29') await this.leave29(); release(); }
-    return found;
-  }
-
   /* ---------- Écoute du réseau CAN (lecture seule) : sert à reconnaître le sélecteur DNA ---------- */
-  monitor(ms, filt) {
+  monitor(ms, filt, p29) {
     const run = async () => {
+      if (p29 && this.proto !== '7') await this._cmd('ATTP7', 2500);
       await this._cmd('ATH1', 800); await this._cmd('ATS1', 800);
       if (filt) { await this._cmd('ATCF' + filt.f, 800); await this._cmd('ATCM' + filt.m, 800); }
       const txt = await new Promise(res => {
@@ -1378,22 +1361,24 @@ class ObdSource {
         Promise.resolve().then(() => this.link.write((this.stn ? 'STMA' : 'ATMA') + '\r')).catch(() => {});
         setTimeout(() => { Promise.resolve().then(() => this.link.write('\r')).catch(() => {}); }, ms); // n'importe quel caractère arrête l'écoute
       });
-      if (filt) { const z = filt.m.length === 3 ? '000' : '00000000'; await this._cmd('ATCF' + z, 800); await this._cmd('ATCM' + z, 800); }
-      await this._cmd('ATS0', 800); await this._cmd('ATH0', 800);
+      // retour à la normale : filtres de réception d'origine (sinon l'adaptateur garde tout le trafic et le régime ne répond plus)
+      await this._cmd('ATCRA', 800); await this._cmd('ATAR', 800); await this._cmd('ATS0', 800); await this._cmd('ATH0', 800);
+      if (p29 && this.proto !== '7') await this._cmd('ATTP' + this.proto, 2500);
+      if (this.proto === '7' || this.proto === '9') { await this._cmd('ATCP18', 800); await this._cmd('ATSHDB33F1', 800); } else await this._cmd('ATSH7DF', 800);
       return parseFrames(txt);
     };
     const p = (this.q || Promise.resolve()).then(run, run);
     this.q = p.catch(() => {});
     return p;
   }
-  async captureAll(rounds) { // écoute large, par tranches d'identifiants pour ne rien rater
+  async captureAll() { // écoute large : messages 11 bits par tranches, puis messages 29 bits
     const frames = [];
-    if (this.proto === '6' || this.proto === '8') { for (let r = 0; r < (rounds || 1); r++) for (let g = 0; g < 8; g++) frames.push(...await this.monitor(650, { f: g + '00', m: '700' })); }
-    else for (let r = 0; r < 4 * (rounds || 1); r++) frames.push(...await this.monitor(1200));
+    if (this.proto === '6' || this.proto === '8') for (let g = 0; g < 8; g++) frames.push(...await this.monitor(650, { f: g + '00', m: '700' }));
+    for (let r = 0; r < 3; r++) frames.push(...await this.monitor(1000, null, true));
     return frames;
   }
   async readDna(sig) {
-    const fr = await this.monitor(400, { f: sig.id, m: sig.id.length === 3 ? '7FF' : '1FFFFFFF' });
+    const fr = await this.monitor(400, { f: sig.id, m: sig.id.length === 3 ? '7FF' : '1FFFFFFF' }, sig.id.length > 3);
     const f = fr.find(x => x.id === sig.id && x.d.length > sig.byte); if (!f) return;
     const v = f.d[sig.byte] & sig.mask, m = Object.keys(sig.vals).find(k => sig.vals[k] === v);
     if (!m) return;
@@ -1413,11 +1398,10 @@ class ObdSource {
     s.coolant = r['05'] ? A('05') - 40 : null;
     s.oil = r['5C'] ? A('5C') - 40 : null;
     s.batt = r['42'] ? (A('42') * 256 + A('42', 1)) / 1000 : r.RV != null ? r.RV : null;
-    const mv = this.mfr.vals, oilD = store.get('oilDid', null), extD = store.get('extDid', null);
-    s.ext = r['46'] ? A('46') - 40 : extD && mv[extD.did] ? decodeTemp(mv[extD.did], extD.f) : null;
+    const mv = this.mfr.vals;
+    s.ext = r['46'] ? A('46') - 40 : null;
     s.extSrc = s.ext != null ? 'voiture' : null;
     if (s.ext == null && typeof wxNow !== 'undefined' && wxNow && Date.now() - wxNow.at < 3600e3) { s.ext = wxNow.temperature; s.extSrc = 'météo'; }
-    if (!r['5C'] && oilD && mv[oilD.did]) s.oil = decodeTemp(mv[oilD.did], oilD.f);
     if (mv['18E4']) s.soot = MFR_DIDS['18E4'].f(mv['18E4']);
     if (mv['3807']) s.regenKm = MFR_DIDS['3807'].f(mv['3807']);
     if (mv['380B']) { const on = mv['380B'][0] > 0; if (on && !s.regen) s.regens = (s.regens || 0) + 1; s.regen = on; }
@@ -1786,7 +1770,7 @@ function gtUpdate(s) {
   gtSpd.set(s.speed, s.speed == null ? 'NONE' : String(Math.round(s.speed)), lim ? 'Limite ' + lim : '', lim && s.speed > lim + 3);
   $('gtCons').innerHTML = $('cons').innerHTML;
   $('gtRange').innerHTML = $('range').innerHTML;
-  $('gtTemp').textContent = s.oil == null || s.coolant == null ? 'NONE' : `${fr(s.oil)}° · ${fr(s.coolant)}°`;
+  $('gtTemp').textContent = s.coolant == null ? 'NONE' : `${fr(s.coolant)} °C`;
 }
 $('spdTrack').setAttribute('d', arc(104, A0, A0 + SW));
 for (let i = 0; i < 32; i++) { const e = document.createElement('i'); if (i >= 26) e.className = 'hi'; $('seg').append(e); }
@@ -2255,7 +2239,7 @@ function drawHolo(canvas, t, opts = {}) {
   ctx.shadowBlur = 0;
   if (!opts.zones) return;
   const s = S();
-  const zoneState = { engine: s.coolant > 105 || s.oil > 125 ? 'crit' : s.oil < 80 ? 'cold' : 'ok', turbo: st.boost(s.boost)[0], dpf: s.regen ? 'warn' : 'ok' };
+  const zoneState = { engine: s.coolant > 105 ? 'crit' : s.coolant != null && s.coolant < 70 ? 'cold' : 'ok', turbo: st.boost(s.boost)[0], dpf: s.regen ? 'warn' : 'ok' };
   const pulse = 0.55 + 0.45 * Math.sin(t * 6);
   // échappement
   ctx.setLineDash(s.regen ? [6, 4] : []); ctx.lineDashOffset = -t * 30;
@@ -2272,7 +2256,7 @@ function drawHolo(canvas, t, opts = {}) {
   });
   if (!opts.labels) return;
   const labels = [
-    { z: 'engine', side: -1, y: 0.2, name: 'MOTEUR', val: `eau ${fr(s.coolant)}° · huile ${fr(s.oil)}°` },
+    { z: 'engine', side: -1, y: 0.2, name: 'MOTEUR', val: `eau ${fr(s.coolant)}°` },
     { z: 'turbo', side: 1, y: 0.2, name: 'TURBO', val: `${fr(s.boost, 2)} bar` },
     { z: 'dpf', side: 1, y: 0.82, name: s.regen ? 'FAP · RÉGÉNÉRATION' : 'FAP', val: `suie ${fr(s.soot)} %` }
   ];
@@ -2297,7 +2281,6 @@ const SENSORS = [
   ['Charge moteur', s => s.load == null ? 'NONE' : Math.round(s.load * 100), '%', () => null],
   ['Pression turbo', s => fr(s.boost, 2), 'bar', s => st.boost(s.boost), 'pleine charge 1,2–1,5'],
   ['Température eau', s => fr(s.coolant), '°C', s => st.cool(s.coolant), 'normal 85–95'],
-  ['Température huile', s => fr(s.oil), '°C', s => st.oil(s.oil), 'chaude 80–115'],
   ['Batterie', s => fr(s.batt, 1), 'V', s => st.batt(s.batt), '13,8–14,6 moteur tournant'],
   ['Suie FAP', s => fr(s.soot), '%', s => st.dpf(s.soot, s.regen), 'régénération vers 80'],
   ['Régénérations', s => s.regens, 'session', () => null],
@@ -2314,7 +2297,7 @@ function renderSensors() {
     if (stt) { row.dataset.state = stt[0]; chip.textContent = stt[1]; chip.style.visibility = 'visible'; } else chip.style.visibility = 'hidden';
   });
   const s2 = S();
-  $('holoState').textContent = s2.regen ? 'régénération FAP en cours' : s2.oil < 80 ? 'moteur en chauffe' : 'tous systèmes nominaux';
+  $('holoState').textContent = s2.regen ? 'régénération FAP en cours' : s2.coolant != null && s2.coolant < 70 ? 'moteur en chauffe' : 'tous systèmes nominaux';
 }
 const DTC_DEMO = [
   { code: 'P0401', st: 'warn', kind: 'mémorisé', title: 'Débit de recirculation des gaz (EGR) insuffisant', expl: "Souvent une vanne EGR encrassée, classique sur les diesels qui roulent beaucoup en ville. Pas urgent : un long trajet sur autoroute aide, sinon un nettoyage de la vanne." }
@@ -2354,8 +2337,10 @@ async function learnDna() {
       cap[k] = await o.captureAll(1);
     }
     const res = findDnaSignal(cap), n = cap.N.length + cap.D.length + cap.A.length;
+    const ids = k => new Set(cap[k].map(f => f.id)).size, n29 = new Set(cap.N.filter(f => f.id.length > 3).map(f => f.id)).size;
+    store.set('dnaLast', `${n} messages, ${ids('N')}/${ids('D')}/${ids('A')} identifiants (N/D/A), dont ${n29} en 29 bits, ${res.length} piste(s)`);
     if (!res.length) {
-      holo('Apprentissage DNA', `<p>Je n'ai pas trouvé le message du sélecteur DNA sur la prise OBD.</p><p class="note">${n} messages écoutés. Sur certaines voitures, le DNA circule sur un réseau qui n'arrive pas jusqu'à la prise. Vous pouvez réessayer moteur tournant, ou continuer à changer le mode depuis l'écran.</p>`, { kicker: 'Données Alfa', ms: 30000 });
+      holo('Apprentissage DNA', `<p>Je n'ai pas trouvé le message du sélecteur DNA sur la prise OBD.</p><p class="note">${n} messages écoutés, ${ids('N')} identifiants différents (${n29} en 29 bits). Sur certaines voitures, le DNA circule sur un réseau qui n'arrive pas jusqu'à la prise. Vous pouvez réessayer moteur tournant, ou continuer à changer le mode depuis l'écran.</p>`, { kicker: 'Données Alfa', ms: 30000 });
       say("Je n'ai pas trouvé le message du DNA sur la prise OBD, monsieur. Il circule peut-être sur un réseau que la prise ne voit pas.");
       return;
     }
@@ -2365,46 +2350,16 @@ async function learnDna() {
     say('Appris, monsieur. Je suis désormais le sélecteur DNA de la voiture.');
   } finally { release(); }
 }
-async function scanAlfa() {
-  const o = liveObd(); if (!o) { say("Il me faut l'OBD connecté, monsieur, moteur tournant."); return; }
-  if (o.task) { say('Je suis déjà occupé avec le calculateur, monsieur.'); return; }
-  const s0 = S();
-  if (s0.coolant == null || s0.coolant < 70) say("Petit conseil, monsieur : pour reconnaître la température d'huile, mieux vaut un moteur chaud, eau au-dessus de 80 degrés. Je lance quand même.");
-  holo('Recherche des données Alfa', '<p>J\'interroge le calculateur, environ une à deux minutes. Restez à l\'arrêt, moteur tournant.</p><div class="pbar"><i id="scanBar" style="width:0%"></i></div><p class="note" id="scanTxt">0 donnée trouvée</p>', { kicker: 'Données Alfa', ms: 0 });
-  say('Je fouille le calculateur, monsieur. Une à deux minutes.');
-  const found = await o.scanMfr((f, n) => { const b = $('scanBar'), t = $('scanTxt'); if (b) b.style.width = Math.round(f * 100) + '%'; if (t) t.textContent = n + ' données trouvées'; });
-  const s = S(), cool = s.coolant, ext = typeof wxNow !== 'undefined' && wxNow ? wxNow.temperature : null;
-  const cands = { oil: [], ext: [] };
-  Object.entries(found).filter(([did]) => !MFR_DIDS[did]).forEach(([did, b]) => Object.keys(TEMP_F).forEach(f => {
-    if (f !== 'A-40' && b.length < 2) return; if (f === 'B-40' && b.length !== 2) return;
-    const v = decodeTemp(b, f); if (v == null) return;
-    if (cool != null && cool >= 60 && v >= cool - 15 && v <= cool + 25 && v > 50) cands.oil.push({ did, f, v });
-    if (ext != null && Math.abs(v - ext) <= 4 && v > -30 && v < 50) cands.ext.push({ did, f, v });
-  }));
-  store.set('scanFound', { at: Date.now(), cool, ext, found: Object.fromEntries(Object.entries(found).map(([k, v]) => [k, v.map(x => hex2(x)).join(' ')])) });
-  const row = (k, c) => `<li><b>22 ${c.did}</b> · ${c.f} → ${c.v} °C <button class="btn" data-pick="${k}|${c.did}|${c.f}" type="button">C'est ${k === 'oil' ? "l'huile" : "l'extérieur"}</button></li>`;
-  holo('Données Alfa trouvées', `<p>${Object.keys(found).length} données répondent. Eau actuellement à ${fr(cool)} °C${ext != null ? ', météo ' + ext + ' °C' : ''}.</p>
-    <p class="label">Huile possible</p><ul class="rlist">${cands.oil.slice(0, 6).map(c => row('oil', c)).join('') || '<li class="empty">Aucune piste (moteur pas assez chaud ?)</li>'}</ul>
-    <p class="label">Extérieur possible</p><ul class="rlist">${cands.ext.slice(0, 6).map(c => row('ext', c)).join('') || '<li class="empty">Aucune piste</li>'}</ul>
-    <p class="note">Choisissez la ligne qui suit le mieux la réalité (l'huile monte un peu au-dessus de l'eau une fois chaude). Le « Rapport OBD » liste tout pour me l'envoyer.</p>`, { kicker: 'Données Alfa', ms: 0 });
-  document.querySelectorAll('[data-pick]').forEach(bt => bt.addEventListener('click', () => {
-    const [k, did, f] = bt.dataset.pick.split('|'); store.set(k === 'oil' ? 'oilDid' : 'extDid', { did, f });
-    say(k === 'oil' ? "Entendu, monsieur. J'affiche désormais la température d'huile à partir de cette donnée." : "Entendu. J'utilise cette donnée pour la température extérieure.");
-  }));
-  say(cands.oil.length ? `Terminé, monsieur. ${Object.keys(found).length} données trouvées, dont ${cands.oil.length} pistes pour l'huile. Choisissez à l'écran.` : `Terminé, monsieur. ${Object.keys(found).length} données trouvées, mais rien qui ressemble clairement à l'huile.`);
-}
 function obdReport() {
-  const o = liveObd(), sc = store.get('scanFound', null), sig = store.get('dnaSig', null), oil = store.get('oilDid', null), ext = store.get('extDid', null);
+  const o = liveObd(), sig = store.get('dnaSig', null), dl = store.get('dnaLast', null);
   const mv = o ? o.mfr.vals : {};
   holo('Rapport OBD', `<p>${o ? `Connecté à ${esc(o.label)}${o.stn ? ' (puce OBDLink)' : ''}, protocole ${esc(o.proto || '?')}, en-tête constructeur ${esc(o.mfr.hdr || 'aucun')}.` : 'OBD non connecté.'}</p>
     <p class="label">Données standard</p><p class="note">${o ? [...o.sup].sort().join(' ') : '—'}</p>
     <p class="label">Données Alfa (mode 22)</p><ul class="rlist">${Object.entries(MFR_DIDS).map(([d, m]) => `<li><span>22 ${d}</span><span>${esc(m.name)}</span><b>${mv[d] ? esc(String(m.f(mv[d]))) + ' ' + m.unit : 'pas de réponse'}</b></li>`).join('')}</ul>
-    <p class="note">Huile : ${oil ? '22 ' + oil.did + ' (' + oil.f + ')' : 'non trouvée'} · Extérieur : ${ext ? '22 ' + ext.did + ' (' + ext.f + ')' : 'météo'} · DNA : ${sig ? sig.id + ' octet ' + (sig.byte + 1) : 'non appris'}</p>
-    ${sc ? `<p class="label">Dernier scanner (${Object.keys(sc.found).length} données, eau ${fr(sc.cool)} °C)</p><p class="note" style="font-family:var(--f-mono);font-size:11px;word-break:break-all">${Object.entries(sc.found).slice(0, 120).map(([k, v]) => k + '=' + v).join(' · ')}</p>` : ''}
+    <p class="note">Extérieur : météo · DNA : ${sig ? sig.id + ' octet ' + (sig.byte + 1) : 'non appris'}${dl ? ' · dernier apprentissage : ' + esc(dl) : ''}</p>
     <p class="note">Faites une capture d'écran de cette fenêtre et envoyez-la : je pourrai affiner les décodages.</p>`, { kicker: 'Données Alfa', ms: 0 });
 }
 $('dnaLearnBtn').addEventListener('click', learnDna);
-$('scanBtn').addEventListener('click', scanAlfa);
 $('obdRepBtn').addEventListener('click', obdReport);
 // la voiture change de mode DNA : l'interface suit
 function onCarDna(m) { if (m && m !== dna) { setDna(m); } }
@@ -2676,7 +2631,6 @@ function breakLocal(q) {
   }
   if (/(je suis fatigue|je fatigue|j ai sommeil|je m endors|pause cafe|faire une pause|ou (faire une pause|m arreter|s arreter)|propose (moi )?une pause|besoin d une pause|trouve (moi )?une (pause|aire))/.test(t)) { proposeBreak(true); return true; }
   if (/(apprends?|apprentissage|detecte|reconnais).{0,12}\bdna\b/.test(t)) { learnDna(); return true; }
-  if (/(cherche|scanne?|trouve).{0,25}(donnees alfa|calculateur|temperature d huile|huile)/.test(t)) { scanAlfa(); return true; }
   if (/rapport obd/.test(t)) { obdReport(); return true; }
   if (/^(lance |ouvre |arme |demarre )?(le )?(banc|banc de puissance|dyno)( de puissance)?$/.test(t)) { openDyno(); say("Banc armé, monsieur. Passez la 3e vers 1 500 tours, sur du plat, puis pied au plancher jusqu'à 4 500."); return true; }
   return false;
@@ -3011,7 +2965,7 @@ function engineHolo() {
   const s = S();
   holo('État moteur', `<div class="hgrid">
     <div data-state="${st.cool(s.coolant)[0]}"><span class="label">Eau</span><b style="color:var(--st)">${fr(s.coolant)} °C</b></div>
-    <div data-state="${st.oil(s.oil)[0]}"><span class="label">Huile</span><b style="color:var(--st)">${fr(s.oil)} °C</b></div>
+    <div><span class="label">Depuis régén. FAP</span><b>${s.regenKm == null ? 'NONE' : s.regenKm.toLocaleString('fr-FR') + ' km'}</b></div>
     <div><span class="label">Turbo</span><b>${fr(s.boost, 2)} bar</b></div>
     <div data-state="${st.batt(s.batt)[0]}"><span class="label">Batterie</span><b style="color:var(--st)">${fr(s.batt, 1)} V</b></div>
     <div data-state="${st.dpf(s.soot, s.regen)[0]}"><span class="label">Suie FAP</span><b style="color:var(--st)">${fr(s.soot)} %</b></div>
@@ -3069,11 +3023,11 @@ function answer(q) {
   if (/moteur|etat|temp|huile|eau|batterie/.test(t)) {
     engineHolo();
     if (s.coolant == null && s.oil == null) return pick(["Je n'ai pas de nouvelles du moteur : l'OBD n'est pas connecté.", "Aucune donnée moteur pour l'instant, l'adaptateur OBD n'est pas branché."]);
-    const cold = s.oil != null && s.oil < 80, batt = s.batt == null ? '' : s.batt < 12.2 ? ` En revanche, la batterie est un peu faible, monsieur : ${fr(s.batt, 1)} V.` : '';
-    return (cold ? pick([`Le moteur se réveille, monsieur : ${fr(s.coolant)} °C d'eau et ${fr(s.oil)} °C d'huile. Je vous suggère de rester sous 3 000 tours le temps qu'il chauffe.`,
-      `Huile à ${fr(s.oil)} °C, monsieur. Le moteur est encore froid ; un peu de patience avant de le solliciter.`])
-      : pick([`Tout est nominal, monsieur : ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile, et la batterie charge normalement.`, `Moteur à température, monsieur. ${fr(s.coolant)} °C d'eau, ${fr(s.oil)} °C d'huile. Rien à signaler.`,
-        `Le moteur est en pleine forme, monsieur : eau à ${fr(s.coolant)} °C, huile à ${fr(s.oil)} °C. Le turbo répond au doigt et à l'œil.`])) + batt;
+    const cold = s.coolant != null && s.coolant < 70, batt = s.batt == null ? '' : s.batt < 12.2 ? ` En revanche, la batterie est un peu faible, monsieur : ${fr(s.batt, 1)} V.` : '';
+    return (cold ? pick([`Le moteur se réveille, monsieur : ${fr(s.coolant)} °C d'eau. Je vous suggère de rester sous 3 000 tours le temps qu'il chauffe.`,
+      `Eau à ${fr(s.coolant)} °C, monsieur. Le moteur est encore froid ; un peu de patience avant de le solliciter.`])
+      : pick([`Tout est nominal, monsieur : ${fr(s.coolant)} °C d'eau, et la batterie charge normalement.`, `Moteur à température, monsieur. ${fr(s.coolant)} °C d'eau. Rien à signaler.`,
+        `Le moteur est en pleine forme, monsieur : eau à ${fr(s.coolant)} °C. Le turbo répond au doigt et à l'œil.`])) + batt;
   }
   if (/turbo|boost|pression/.test(t)) return `Pression turbo ${fr(s.boost, 2)} bar. Pic de la session : ${fr(peak, 2)} bar.`;
   if (/fap|filtre|regen|suie|particule/.test(t)) return s.regen
@@ -3251,7 +3205,7 @@ function carState() {
   return {
     source: source === sim ? 'simulation (données de démonstration)' : source instanceof ObdSource ? (source.connected ? 'OBD connecté à ' + source.label : 'OBD déconnecté, reconnexion en cours') : 'aucune (adaptateur OBD non connecté)',
     vitesse_kmh: r0(s.speed), regime_tr_min: r0(s.rpm), rapport: s.gear, turbo_bar: r2(s.boost), charge_moteur_pct: s.load == null ? null : r0(s.load * 100),
-    eau_c: r0(s.coolant), huile_c: r0(s.oil), batterie_v: r1(s.batt), suie_fap_pct: r0(s.soot), regeneration_fap_en_cours: !!s.regen, conso_l_h: r1(s.lph),
+    eau_c: r0(s.coolant), huile_c: s.oil == null ? 'non transmise par cette voiture' : r0(s.oil), km_depuis_regeneration_fap: s.regenKm == null ? null : s.regenKm, batterie_v: r1(s.batt), suie_fap_pct: r0(s.soot), regeneration_fap_en_cours: !!s.regen, conso_l_h: r1(s.lph),
     temperature_exterieure_c: s.ext != null ? r0(s.ext) : wxNow ? wxNow.temperature : null,
     mode_dna: { D: 'Dynamic (sport)', N: 'Natural', A: 'All-weather (pluie)' }[dna], page_affichee: page,
     navigation: n.dist == null ? n.street : { prochaine_manoeuvre: n.street, dans: fmtDist(n.dist), destination: n.label, arrivee: n.eta, restant: fmtDist(n.remain) },
@@ -3425,7 +3379,7 @@ $('setBtn').addEventListener('click', () => openSettings());
 async function runBriefing(force) {
   const s = S(), u = mostUrgent();
   if (!AI.cfg.briefing && !force) {
-    say(`${greeting()}. ${s.oil == null ? '' : s.oil < 80 ? 'Moteur froid, je surveille l\'huile. ' : ''}${u && u.s.state !== 'ok' ? 'Petit rappel : ' + u.it.name.toLowerCase() + ' ' + u.s.due + '.' : ''}`.trim());
+    say(`${greeting()}. ${s.coolant == null ? '' : s.coolant < 70 ? 'Moteur froid, allez-y en douceur le temps qu\'il chauffe. ' : ''}${u && u.s.state !== 'ok' ? 'Petit rappel : ' + u.it.name.toLowerCase() + ' ' + u.s.due + '.' : ''}`.trim());
     return;
   }
   core.classList.add('think');
@@ -4018,7 +3972,7 @@ function rainUpdate(s) {
   const iceEl = $('wxIce'); iceEl.textContent = ice ? ice[0] : 'NONE'; iceEl.style.color = ice ? ice[1] : ''; iceEl.style.fontSize = '18px';
   $('wxWind').innerHTML = RADAR.wind == null ? '--' : `${Math.round(RADAR.wind)}<small>km/h</small>`;
   $('wxCool').innerHTML = s.coolant == null ? 'NONE' : `${fr(s.coolant)}<small>°C</small>`;
-  $('wxOil').innerHTML = s.oil == null ? 'NONE' : `${fr(s.oil)}<small>°C</small>`;
+  $('wxOil').innerHTML = s.soot == null ? 'NONE' : `${fr(s.soot)}<small>%</small>`;
   $('wxBatt').innerHTML = s.batt == null ? 'NONE' : `${fr(s.batt, 1)}<small>V</small>`;
   // aquaplaning : pluie intense ou orage et vitesse élevée
   const intense = RADAR.now >= 6 || RADAR.storm, al = $('wxAlert');
@@ -4493,14 +4447,14 @@ $('fs').addEventListener('click', async () => {
 /* Alertes et remarques spontanées */
 const flags = { oilWarm: false, regen: false, coldRevAt: -1e9, peakSaid: false, longDrive: false };
 function alerts(s, now) {
-  if (!flags.oilWarm && s.oil >= 80) { flags.oilWarm = true; say(pick(['Huile à 80 °C. Le moteur est chaud, toute la puissance est disponible.', 'Moteur à température, monsieur. Vous pouvez en profiter.'])); }
+  if (!flags.oilWarm && s.coolant >= 80) { flags.oilWarm = true; say(pick(['Huile à 80 °C. Le moteur est chaud, toute la puissance est disponible.', 'Moteur à température, monsieur. Vous pouvez en profiter.'])); }
   if (s.regen !== flags.regen) {
     flags.regen = s.regen; $('chipRegen').hidden = !s.regen;
     if (s.regen) say(s.regens >= 3 ? 'Encore une régénération du FAP. C\'est la ' + s.regens + 'e, un trajet sur autoroute lui ferait du bien.' : 'Régénération du filtre à particules lancée. Évitez de couper le moteur pendant les prochaines minutes.');
     else say(`Régénération terminée. Filtre à ${fr(s.soot)} %.`);
   }
-  if (s.rpm > 2900 && s.oil < 60 && now - flags.coldRevAt > 60000) { flags.coldRevAt = now; say('Moteur encore froid. Je vous conseille de rester sous 3 000 tr/min.'); }
-  if (!flags.peakSaid && s.boost > 1.38 && s.oil >= 80) { flags.peakSaid = true; say(`Pic à ${fr(s.boost, 2)} bar. Joli.`); }
+  if (s.rpm > 2900 && s.coolant != null && s.coolant < 50 && now - flags.coldRevAt > 60000) { flags.coldRevAt = now; say('Moteur encore froid. Je vous conseille de rester sous 3 000 tr/min.'); }
+  if (!flags.peakSaid && s.boost > 1.38 && s.coolant >= 75) { flags.peakSaid = true; say(`Pic à ${fr(s.boost, 2)} bar. Joli.`); }
   if (!flags.longDrive && trip.t > 7200) { flags.longDrive = true; say('Deux heures de route, monsieur. Une pause café serait raisonnable.'); }
 }
 
@@ -4600,7 +4554,7 @@ function frame(now) {
       const lit = Math.round(s.boost / 1.6 * 32);
       segs.forEach((e, i) => e.classList.toggle('on', i < lit));
       $('cool').textContent = fr(s.coolant); tile('tCool', (s.coolant - 20) / 100, st.cool(s.coolant));
-      $('oil').textContent = fr(s.oil); tile('tOil', (s.oil - 20) / 110, st.oil(s.oil));
+      $('oil').textContent = s.regenKm == null ? 'NONE' : s.regenKm.toLocaleString('fr-FR'); tile('tOil', (s.regenKm || 0) / 800, s.regenKm == null ? NA : s.regenKm > 600 ? ['warn', 'bientôt'] : ['ok', 'normal']);
       $('batt').textContent = fr(s.batt, 1); tile('tBatt', (s.batt - 11) / 4, st.batt(s.batt));
       $('soot').textContent = fr(s.soot); tile('tDpf', s.soot / 100, st.dpf(s.soot, s.regen));
       if (dna === 'N') gtUpdate(s);
