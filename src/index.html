@@ -1106,7 +1106,11 @@ class WebBleLink {
     this.dev.addEventListener('gattserverdisconnected', () => this.onLost && this.onLost());
   }
   async open(onText) {
-    const server = await this.dev.gatt.connect();
+    // une seule connexion à la fois sur l'OBDLink : on libère une éventuelle connexion restée ouverte, et on réessaie une fois
+    if (this.dev.gatt.connected) { try { this.dev.gatt.disconnect(); } catch (e) {} await new Promise(r => setTimeout(r, 600)); }
+    let server;
+    try { server = await this.dev.gatt.connect(); }
+    catch (e) { await new Promise(r => setTimeout(r, 1500)); server = await this.dev.gatt.connect(); }
     let wr = null, nt = null;
     for (const u of BLE_SVC) {
       try {
@@ -1129,6 +1133,7 @@ class WebBleLink {
     return this.wr.properties.writeWithoutResponse ? this.wr.writeValueWithoutResponse(d) : this.wr.writeValue(d);
   }
 }
+addEventListener('pagehide', () => { try { if (typeof source !== 'undefined' && source && source.link && source.link.dev && source.link.dev.gatt && source.link.dev.gatt.connected) source.link.dev.gatt.disconnect(); } catch (e) {} });
 class NativeBleLink {
   constructor() { this.P = window.Capacitor.Plugins.BluetoothLe; this.subs = []; }
   async init() { if (!this.ready) { await this.P.initialize({ androidNeverForLocation: true }); this.ready = true; } }
@@ -2450,7 +2455,7 @@ $('obdBtn').addEventListener('click', async () => {
     setObdUi();
     say(e.name === 'NotFoundError' || /cancel|annul/i.test(e.message) ? 'Connexion annulée.'
       : e.name === 'SecurityError' || /permission|policy|disallow|not allowed/i.test(e.message) ? (NATIVE ? "J'ai besoin de l'autorisation Bluetooth, monsieur. Acceptez-la quand Android la demande." : 'Le Bluetooth est bloqué dans cette prévisualisation. Il fonctionnera depuis la version installée sur la tablette.')
-      : 'Connexion impossible : ' + e.message);
+      : 'Connexion impossible : ' + ((e && (e.message || e.name)) || String(e)) + ". Fermez complètement Bluefy (ou l'appli OBDLink), débranchez l'adaptateur dix secondes, puis réessayez.");
   }
 });
 // Appli Android : reconnexion automatique au dernier adaptateur utilisé
