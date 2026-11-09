@@ -1247,14 +1247,16 @@ class ObdSource {
     this.buf = ''; this.pending = null;
     await this.link.open(t => this.onData(t));
     for (const c of ['ATZ', 'ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1', 'ATSP0']) await this.cmd(c, 2500);
-    await this.cmd('0100', 8000); // recherche du protocole (CAN 500 kb/s sur la Giulietta)
+    let r0 = await this.cmd('0100', 8000); // recherche du protocole (CAN 500 kb/s sur la Giulietta)
+    // la recherche automatique n'a rien donné : on essaie directement les protocoles CAN (11 puis 29 bits, 500 puis 250 kb/s)
+    for (const pr of ['6', '7', '8', '9']) { if (this.parse(r0, '00')) break; await this.cmd('ATWS', 2500); for (const c of ['ATE0', 'ATL0', 'ATS0', 'ATH0', 'ATAT1']) await this.cmd(c, 1500); await this.cmd('ATSP' + pr, 1500); r0 = await this.cmd('0100', 5000); }
     if (!this.sup.size) for (const base of [0x00, 0x20, 0x40]) {
       const b = this.parse(await this.cmd('01' + hex2(base), 3000), hex2(base));
       if (!b || b.length < 4) break;
       for (let i = 0; i < 32; i++) if (b[i >> 3] & (0x80 >> (i & 7))) this.sup.add(hex2(base + i + 1));
       if (!this.sup.has(hex2(base + 0x20))) break;
     }
-    if (!this.sup.size) throw new Error("l'adaptateur répond, mais pas la voiture. Le contact est-il mis ?");
+    if (!this.sup.size) { const e = new Error("l'adaptateur répond, mais pas la voiture. Le contact est-il mis ?"); e.journal = (this.journal || []).slice(-25); throw e; }
     this.lost = false; this.connected = true; this.loop();
   }
   // Liaison coupée : toutes les valeurs passent à NONE, pas de simulation, et on retente toutes les 4 s
@@ -2472,7 +2474,7 @@ $('obdBtn').addEventListener('click', async () => {
     setObdUi();
     say(e.name === 'NotFoundError' || /cancel|annul/i.test(e.message) ? 'Connexion annulée.'
       : e.name === 'SecurityError' || /permission|policy|disallow|not allowed/i.test(e.message) ? (NATIVE ? "J'ai besoin de l'autorisation Bluetooth, monsieur. Acceptez-la quand Android la demande." : 'Le Bluetooth est bloqué dans cette prévisualisation. Il fonctionnera depuis la version installée sur la tablette.')
-      : 'Connexion impossible : ' + ((e && (e.message || e.name)) || String(e)) + ". Fermez complètement Bluefy (ou l'appli OBDLink), débranchez l'adaptateur dix secondes, puis réessayez.");
+      : (e && e.journal ? (holo('Connexion OBD', `<p>${esc(e.message)}</p><p class="label">Échanges avec l'adaptateur</p><p class="note" style="font-family:var(--f-mono);font-size:10.5px">${e.journal.map(esc).join('<br>')}</p><p class="note">Faites une capture de cette fenêtre et envoyez-la.</p>`, { kicker: 'OBD', ms: 0 }), '') : '') + 'Connexion impossible : ' + ((e && (e.message || e.name)) || String(e)) + ". Fermez complètement Bluefy (ou l'appli OBDLink), débranchez l'adaptateur dix secondes, puis réessayez.");
   }
 });
 // Appli Android : reconnexion automatique au dernier adaptateur utilisé
