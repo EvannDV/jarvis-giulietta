@@ -6,6 +6,15 @@ Deux façons de l'utiliser :
 - **L'appli Android (recommandé)** : connexion OBD automatique, vraie musique, écran toujours allumé.
 - **La version web** dans Chrome (GitHub Pages) : rien à installer, mais connexion OBD à la main à chaque démarrage.
 
+## Version stable de référence (OBD validé sur la voiture)
+
+Commit `d94dd891cd42ea97f45edcc8eecef6a7a3450f2e` (APK build 28, même code que le build 22, commit `3241796`).
+Validée le 9 novembre 2026 sur la Giulietta avec l'OBDLink CX : régime, eau, batterie, turbo, conso et autonomie s'affichent.
+Si une version plus récente casse l'OBD, revenir à celle-ci :
+
+    git checkout d94dd891cd42ea97f45edcc8eecef6a7a3450f2e -- src/index.html
+    python3 src/build.py
+
 ## Appli Android
 
 ### Installer
